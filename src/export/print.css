@@ -1,0 +1,27 @@
+html[data-better-export-conversation] .help-actions [data-action^="toggle-"] { display: none; }
+
+@media print {
+  @page { margin: 14mm; }
+  :root { --line-height: 1.5em; }
+  html, body { background: white !important; color: #111 !important; font-size: 10pt; }
+  #app, #content { display: block !important; width: auto !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+  #sidebar, #sidebar-resizer, #sidebar-overlay, #hamburger, #image-modal,
+  .help-bar, .copy-link-btn, .better-export-copy-status, .system-prompt, .tools-list,
+  .expand-hint { display: none !important; }
+  #content, #content * { color: #111 !important; background: transparent !important; box-shadow: none !important; text-shadow: none !important; }
+  .header { border-bottom: 1px solid #bbb; padding-bottom: 10pt; }
+  .header h1 { overflow-wrap: anywhere; }
+  .message-container, .user-message, .assistant-message, .tool-execution { border-radius: 0 !important; }
+  .user-message { border-left: 2px solid #777; }
+  .message-timestamp { font-size: 8pt; color: #555 !important; }
+  pre, code, .tool-output { white-space: pre-wrap !important; overflow: visible !important; overflow-wrap: anywhere !important; word-break: break-word; }
+  .tool-output.expandable .output-preview { display: none !important; }
+  .tool-output.expandable .output-full { display: block !important; }
+  img { max-width: 100% !important; max-height: none !important; break-inside: avoid; }
+  table { width: 100%; font-size: 9pt; }
+  thead { display: table-header-group; }
+  tr, .katex-display { break-inside: avoid; }
+  .katex-display { overflow: visible !important; }
+  .better-export-math { outline: none !important; cursor: auto !important; }
+  a { text-decoration: underline; }
+}

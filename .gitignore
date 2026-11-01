@@ -1,0 +1,6 @@
+node_modules/
+*.tgz
+coverage/
+
+# Local reference session; may contain private conversation content.
+/pi-session*.html

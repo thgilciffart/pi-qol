@@ -13,7 +13,7 @@ import { redactSession, reviewRedactions } from './redact.ts';
 export async function exportCommand(pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext): Promise<void> {
   let staging: string | undefined;
   try {
-    await ctx.waitForIdle();
+    // The native exporter snapshots recorded entries without interrupting a running turn.
     if (!ctx.sessionManager.getSessionFile()) throw new Error('Nothing to export yet. Start a conversation first.');
     const options = parseOptions(args);
     if (options.redact && !ctx.hasUI) throw new Error('Redaction preview requires an interactive Pi UI.');
@@ -64,7 +64,7 @@ export async function exportCommand(pi: ExtensionAPI, args: string, ctx: Extensi
 
 export default function betterExport(pi: ExtensionAPI): void {
   pi.registerCommand('better-export', {
-    description: 'Export Pi HTML with LaTeX, print/PDF, --conversation, --redact, or --share',
+    description: 'Export Pi HTML, including during a turn, with LaTeX, print/PDF, --conversation, --redact, or --share',
     handler: (args, ctx) => exportCommand(pi, args, ctx),
   });
 }

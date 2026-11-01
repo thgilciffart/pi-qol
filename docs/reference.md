@@ -64,6 +64,8 @@ In the confirmation view, Enter confirms deletion, N returns to the list, and Es
 
 The default filename is `pi-session-<timestamp>.html`. Relative paths use the chat's working directory. Paths beginning with `~/` expand to your home directory. The exporter creates missing parent directories and accepts `.html` and `.htm` files.
 
+Export runs immediately during an active turn without waiting for or interrupting the agent. It captures the session entries recorded when the HTML is generated. A reply still streaming and unfinished tool output are included only after Pi records them. Later messages do not update an existing export.
+
 Without an interactive UI, export saves new files but refuses overwrites and redaction previews. In-memory sessions cannot be exported through this command. Filtering and redaction affect the export only.
 
 Inline math accepts `$...$` and `\(...\)`. Display math accepts `$$...$$` and `\[...\]`. Code remains literal. Unsupported LaTeX remains visible. Equation copying depends on the browser's clipboard permissions for local files.

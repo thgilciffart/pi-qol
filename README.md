@@ -104,6 +104,8 @@ Ephemeral mode controls Pi's session file. Exported HTML and files that tools cr
 
 Run `/better-export` to save the current session as HTML. Pi asks before replacing a file and offers to open the result in your browser.
 
+You can export during a running turn. The export captures recorded messages without waiting for or interrupting the agent. A reply still streaming is included only after Pi records it.
+
 ```text
 /better-export
 /better-export "exports/My session.html"

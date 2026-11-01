@@ -8,6 +8,7 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { getPackageDir, SessionManager, initTheme } from '@earendil-works/pi-coding-agent';
 import { enhanceHtml } from '../src/export/enhance.ts';
 import { exportCommand } from '../src/export/index.ts';
+import { readSessionData } from '../src/export/session.ts';
 
 const { exportSessionToHtml } = await import(pathToFileURL(join(getPackageDir(), 'dist/core/export-html/index.js')).href);
 const { getThemeByName } = await import(pathToFileURL(join(getPackageDir(), 'dist/modes/interactive/theme/theme.js')).href);
@@ -105,6 +106,38 @@ test('command writes enhanced native HTML before asking to open and honors decli
     await exportCommand({ getAllTools: () => [] } as any, '"with spaces.html"', ctx as any);
     assert.deepEqual(prompts, ['Open exported HTML?', 'Replace existing export?']);
     assert.equal(await readFile(target, 'utf8'), firstExport);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('exports a running turn without waiting or interrupting it', async () => {
+  const { dir, sm } = await fixture();
+  try {
+    sm.appendMessage({ role: 'assistant', content: [{ type: 'toolCall', id: 'pending-call', name: 'bash', arguments: { command: 'long-running-task' } }],
+      api: 'anthropic-messages', provider: 'anthropic', model: 'test',
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: 'toolUse', timestamp: Date.now() });
+    const leaf = sm.getLeafId();
+    const notifications: { message: string; type: string }[] = [];
+    const ctx = {
+      cwd: dir, sessionManager: sm, hasUI: false, isIdle: () => false,
+      waitForIdle: async () => { throw new Error('The agent is still running'); },
+      abort: () => { throw new Error('Export must not interrupt the agent'); },
+      getSystemPrompt: () => 'test system prompt',
+      ui: { theme: getThemeByName('dark')!, notify: (message: string, type: string) => notifications.push({ message, type }) },
+    };
+    await exportCommand({ getAllTools: () => [] } as any, 'mid-turn.html', ctx as any);
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0].type, 'info');
+    const html = await readFile(join(dir, 'mid-turn.html'), 'utf8');
+    const data = readSessionData(html);
+    assert.equal(data.leafId, leaf);
+    assert.equal(data.entries.at(-1)?.message?.role, 'assistant');
+    assert.match(JSON.stringify(data.entries.at(-1)), /pending-call/);
+    assert.match(html, /id="pi-better-export"/);
+    assert.equal(sm.getLeafId(), leaf);
+    assert.equal(ctx.isIdle(), false);
+    sm.appendMessage({ role: 'toolResult', toolCallId: 'pending-call', toolName: 'bash', content: [{ type: 'text', text: 'Task finished later' }], isError: false, timestamp: Date.now() });
+    assert.doesNotMatch(JSON.stringify(data), /Task finished later/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

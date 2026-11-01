@@ -36,9 +36,9 @@ function harness(manager = SessionManager.inMemory()) {
   const emit = async (name: string, event: any = {}) => handlers.get(name)?.({ type: name, ...event }, ctx);
   const tool = (name: string, args = {}) => tools.get(name).execute('call', args, undefined, undefined, ctx);
   const state = async (): Promise<Goal | null> => (await tool('get_goal')).details.goal;
-  async function begin(automatic = false) {
+  async function begin(automatic = false, prompt = 'continue') {
     idle = false;
-    await emit('before_agent_start', automatic ? { messageType: 'custom', message: sent.at(-1) } : { messageType: 'user', prompt: 'continue' });
+    await emit('before_agent_start', automatic ? { messageType: 'custom', message: sent.at(-1) } : { messageType: 'user', prompt });
     await emit('agent_start');
   }
   async function settle(options: any = {}) {
@@ -102,6 +102,61 @@ describe('/goal', () => {
     await h.run('edit Second');
     expect(await h.state()).toMatchObject({ objective: 'Second', status: 'paused' });
     expect(h.sent).toHaveLength(1);
+  });
+
+  test('user guidance steers an active goal without pausing or interrupting it', async () => {
+    const h = harness();
+    await h.run('Fix it');
+    await h.begin();
+    await h.emit('input', { source: 'interactive', text: 'you can use subagents btw', streamingBehavior: 'steer' });
+    expect(await h.state()).toMatchObject({ objective: 'Fix it', status: 'active' });
+    expect(h.wasAborted()).toBe(false);
+    await h.emit('tool_execution_end');
+    expect((await h.settle()).continue).toBe(true);
+  });
+
+  test('new user guidance can authorize resuming a paused goal without the word resume', async () => {
+    const h = harness();
+    await h.run('--tokens 100 Fix it');
+    await h.begin();
+    await h.usage();
+    await h.tool('update_goal', { status: 'paused' });
+    await expect(h.tool('update_goal', { status: 'active' })).rejects.toThrow('new user message');
+    await h.emit('input', { source: 'extension', text: 'keep going' });
+    await expect(h.tool('update_goal', { status: 'active' })).rejects.toThrow('new user message');
+    await h.begin(false, 'you can use subagents btw');
+    await h.tool('update_goal', { status: 'active' });
+    expect(await h.state()).toMatchObject({ status: 'active', objective: 'Fix it', tokenBudget: 100, tokensUsed: 18, turns: 1 });
+    await expect(h.tool('update_goal', { status: 'blocked' })).rejects.toThrow('three');
+    await h.emit('tool_execution_end');
+    expect((await h.settle()).continue).toBe(true);
+    expect(h.sent).toHaveLength(1);
+  });
+
+  test('steering input can authorize resuming within an existing run', async () => {
+    const h = harness();
+    await h.run('Fix it');
+    await h.begin();
+    await h.tool('update_goal', { status: 'paused' });
+    await h.emit('input', { source: 'interactive', text: 'Try the other approach', streamingBehavior: 'steer' });
+    await h.tool('update_goal', { status: 'active' });
+    expect((await h.state())?.status).toBe('active');
+  });
+
+  test('user-authorized tool resume cannot bypass exhausted budgets or completion', async () => {
+    const h = harness();
+    await h.run('--tokens 100 Fix it');
+    await h.begin();
+    await h.usage();
+    await h.tool('update_goal', { status: 'paused' });
+    await h.run('budget 10');
+    await h.begin(false, 'keep going');
+    await expect(h.tool('update_goal', { status: 'active' })).rejects.toThrow('exhausted');
+    await h.run('budget 100');
+    await h.tool('update_goal', { status: 'active' });
+    await h.tool('update_goal', { status: 'complete' });
+    await h.begin(false, 'keep going');
+    await expect(h.tool('update_goal', { status: 'active' })).rejects.toThrow('Cannot resume a complete');
   });
 
   test('clear removes the goal and cancels continuation', async () => {
@@ -277,11 +332,10 @@ describe('/goal', () => {
     }
     await h.tool('update_goal', { status: 'blocked' });
     expect((await h.state())?.status).toBe('blocked');
-    await expect(h.tool('update_goal', { status: 'complete' })).rejects.toThrow('Only the user');
+    await expect(h.tool('update_goal', { status: 'complete' })).rejects.toThrow('status active first');
     expect(await h.settle()).toBeUndefined();
-    h.setIdle(true);
-    await h.run('resume');
-    await h.begin(true);
+    await h.begin(false, 'Try subagents for the remaining work');
+    await h.tool('update_goal', { status: 'active' });
     await expect(h.tool('update_goal', { status: 'blocked' })).rejects.toThrow('three');
   });
 });

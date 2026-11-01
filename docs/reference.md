@@ -32,11 +32,12 @@ Deletion removes only the selected JSONL session files. Forked sessions, exports
 
 ## Thread picker keys
 
-The list contains thread rows and a search box. It has no action rows. Selection persists when the search or scope changes.
+The list contains thread rows and a search box. It has no action rows. Selection persists when the search, scope, or grouping changes. Ctrl+G cycles through ungrouped, date, and project views. Group headings are not selectable. Changing the grouping keeps the same thread highlighted.
 
 | Key | Behavior |
 | --- | --- |
 | Tab | Switches between the current project and all projects. |
+| Ctrl+G | Cycles grouping between none, date, and project. |
 | Up or Down | Moves the highlighted row. |
 | Page Up or Page Down | Moves by one page. |
 | Home or End | Moves to the first or last matching thread. |
@@ -44,6 +45,8 @@ The list contains thread rows and a search box. It has no action rows. Selection
 | Ctrl+A | Selects all matching threads in the current scope. |
 | Ctrl+D | Asks to delete the selected threads. With no selection, asks to delete the highlighted thread. |
 | Escape | Exits the picker without deleting unconfirmed selections. |
+
+Date groups use the last-modified calendar date in the local timezone, with the newest date first. Project groups use the full working directory path in alphabetical order. Within each group, threads appear newest first. Group headings repeat when you scroll within a group.
 
 In the confirmation view, Enter confirms deletion, N returns to the list, and Escape exits. Confirmation includes selections hidden by the current search or scope. The picker remains open after deletion and retains threads whose files could not be removed.
 

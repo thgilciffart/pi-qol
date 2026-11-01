@@ -49,9 +49,11 @@ Goal tools return usage so the agent can report consumed tokens after completing
 
 ## Continuation and interruption
 
-The extension requests continuation at Pi's `agent_before_settle` boundary. It appends a hidden context message and requests one more model turn. Existing boundary entries from other extensions are retained.
+The extension requests continuation at Pi's `agent_before_settle` boundary. It appends a short hidden continuation request and requests one more model turn. Existing boundary entries from other extensions are retained.
 
-Queued messages and continuations from other extensions take priority. A new user message steers the goal. The latest goal state enters model context on every request, including after compaction or an objective edit. Goal text is encoded as user-provided data.
+Queued messages and continuations from other extensions take priority. A new user message steers the goal. One stable goal header enters model context before the conversation on every request, including after compaction or an objective edit. Goal text is encoded as user-provided data. Routine usage changes do not change this header; current usage remains available in the indicator and `get_goal`.
+
+The header keeps the latest tool result or user message at the end of context. Full goal reminders from older versions become short continuation requests in model context. The saved transcript remains unchanged. The instructions discourage repeated goal and usage recaps, while allowing brief reorientation after compaction and updates about new findings or blockers.
 
 An automatic turn with no tool calls suppresses the next goal continuation. The goal remains active; `/goal resume` explicitly retries it. A provider or execution error that reaches final settlement blocks the goal. Escape pauses it. Continuation uses no timer or background worker. A UI timer redraws elapsed time while work runs.
 

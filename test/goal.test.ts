@@ -256,7 +256,8 @@ describe('/goal', () => {
     const result = await h.settle({ entries: [prior] });
     expect(result.continue).toBe(true);
     expect(result.entries[0]).toEqual(prior);
-    expect(result.entries[1].content).toContain('Fix it');
+    expect(result.entries[1].customType).toBe('pi-qol-goal-continuation');
+    expect((await h.emit('context', { messages: [] })).messages[0].content).toContain('Fix it');
     await h.emit('agent_start');
     expect((await h.state())?.turns).toBe(2);
     expect(await h.settle()).toBeUndefined();
@@ -301,10 +302,40 @@ describe('/goal', () => {
     await h.run('edit Revised');
     const context = await h.emit('context', { messages: [{ role: 'user', content: 'compacted' }] });
     expect(context.messages).toHaveLength(2);
-    expect(context.messages[1].content).toContain('Revised');
-    expect(context.messages[1].content).not.toContain('Original');
+    expect(context.messages[0].content).toContain('Revised');
+    expect(context.messages[0].content).not.toContain('Original');
     await h.run('clear');
     expect((await h.emit('context', { messages: [] })).messages[0].content).toContain('no active goal');
+  });
+
+  test('goal context stays stable as usage grows and leaves the latest tool result last', async () => {
+    const h = harness();
+    await h.run('--tokens 100 Fix it');
+    await h.begin();
+    const latest = { role: 'toolResult', toolCallId: 'read', toolName: 'read', content: [{ type: 'text', text: 'new evidence' }] };
+    const messages = [{ role: 'user', content: 'Fix it' }, latest];
+    const before = await h.emit('context', { messages });
+    await h.usage();
+    const after = await h.emit('context', { messages });
+    expect((await h.state())?.tokensUsed).toBe(18);
+    expect(after.messages).toEqual(before.messages);
+    expect(after.messages.at(-1)).toEqual(latest);
+    expect(after.messages[0].content).toContain('Fix it');
+    expect(after.messages.filter((message: any) => message.customType === GOAL_ENTRY)).toHaveLength(1);
+  });
+
+  test('legacy full reminders are shortened in model context without changing session history', async () => {
+    const h = harness();
+    await h.run('Revised goal');
+    const legacy = { role: 'custom', customType: 'pi-qol-goal-continuation', display: false,
+      content: 'The session goal is active. Objective: obsolete goal. Tokens used: 12345.', timestamp: 1 };
+    const latest = { role: 'user', content: 'Use the latest evidence' };
+    const context = await h.emit('context', { messages: [legacy, latest] });
+    expect(JSON.stringify(context.messages)).not.toContain('obsolete goal');
+    expect(JSON.stringify(context.messages)).not.toContain('12345');
+    expect(context.messages[0].content).toContain('Revised goal');
+    expect(context.messages.at(-1)).toEqual(latest);
+    expect(legacy.content).toContain('obsolete goal');
   });
 
   test('model creation refuses unfinished goals and completion stops continuation', async () => {

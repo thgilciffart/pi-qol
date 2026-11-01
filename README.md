@@ -43,7 +43,7 @@ To try the extension without installing it, run `pi -e ./index.ts` from this dir
 
 ## Read response statistics
 
-Send a prompt. Each final assistant reply has a row with separate input and output token counts, tokens per second, and TTFT. Tool-call messages have no statistics row. Statistics appear only in the transcript.
+Send a prompt. Each final assistant reply has a row with separate input and output token counts, tokens per second, TTFT, and cost in USD. Tool-call messages have no statistics row. Statistics appear only in the transcript.
 
 See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
 

@@ -10,12 +10,13 @@ Each final assistant reply adds a statistics row to the transcript. Messages tha
 | Output | Provider-reported output tokens for this reply, including reasoning tokens when the provider counts them. |
 | TTFT | Time from Pi's `before_provider_request` event to the first nonempty text, thinking, or tool-call delta. |
 | Tokens per second | Output tokens divided by the elapsed seconds after the first delta and before `message_end`. |
+| Cost | Pi's `usage.cost.total` for this response in USD, rounded to four decimal places. Includes input, output, cache-read, and cache-write costs. Missing or invalid values display `n/a`. |
 
 The clock is monotonic. TTFT includes request and network latency. Stream chunks can contain several tokens, so TTFT and token rate are approximations of provider generation timing. The rate uses the full output count because Pi does not report the token count of the first chunk.
 
 Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Token counts use provider usage reports rather than local tokenization.
 
-Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with separate input and output counts. If a statistics entry lacks input usage, the renderer reads the original assistant message when available. Otherwise, input displays `n/a`. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
+Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with separate input and output counts. If a statistics entry lacks input usage or cost, the renderer reads the original assistant message when available. Missing values display `n/a`. Cost uses Pi's model pricing and usage data, rather than an account billing total. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
 
 ## Commands
 

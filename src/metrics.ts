@@ -4,6 +4,7 @@ import { Text } from '@earendil-works/pi-tui';
 export const METRICS_ENTRY = 'pi-qol-metrics';
 export interface ResponseMetrics {
   input?: number;
+  cost?: number;
   output: number;
   ttftMs?: number;
   durationMs: number;
@@ -22,7 +23,8 @@ export function calculateMetrics(input: number, output: number, durationMs: numb
 export function formatMetrics(stats: ResponseMetrics): string {
   const tps = stats.tps === undefined ? 'n/a' : stats.tps.toFixed(1);
   const ttft = stats.ttftMs === undefined ? 'n/a' : `${(stats.ttftMs / 1000).toFixed(2)}s`;
-  return `${stats.input ?? 'n/a'} input  ${stats.output} output  ${tps} tok/s  TTFT ${ttft}`;
+  const cost = stats.cost !== undefined && Number.isFinite(stats.cost) && stats.cost >= 0 ? `$${stats.cost.toFixed(4)}` : 'n/a';
+  return `${stats.input ?? 'n/a'} input  ${stats.output} output  ${tps} tok/s  TTFT ${ttft}  cost ${cost}`;
 }
 
 function isReply(message: { role: string; content?: unknown; stopReason?: string }): boolean {
@@ -44,9 +46,9 @@ export default function metrics(pi: ExtensionAPI): void {
     if (stats.messageEntryId && session) {
       const source = session.getEntry(stats.messageEntryId);
       if (source?.type !== 'message' || !isReply(source.message)) return undefined;
-      if (stats.input === undefined && source.message.role === 'assistant') {
+      if (source.message.role === 'assistant') {
         const usage = source.message.usage;
-        stats = { ...stats, input: usage.input + usage.cacheRead + usage.cacheWrite };
+        stats = { ...stats, input: stats.input ?? usage.input + usage.cacheRead + usage.cacheWrite, cost: stats.cost ?? usage.cost?.total };
       }
     }
     return new Text(theme.fg('dim', formatMetrics(stats)), 0, 0);
@@ -80,6 +82,7 @@ export default function metrics(pi: ExtensionAPI): void {
     const duration = started === undefined ? message.durationMs ?? 0 : performance.now() - started;
     pending = isReply(message) ? calculateMetrics(message.usage.input + message.usage.cacheRead + message.usage.cacheWrite, message.usage.output, duration,
       started !== undefined && first !== undefined ? first - started : undefined) : undefined;
+    if (pending) pending.cost = message.usage.cost?.total;
     started = first = undefined;
   });
   // Final replies have no tool results. Append after Pi persists the assistant message.

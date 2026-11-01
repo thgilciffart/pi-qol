@@ -3,6 +3,7 @@ import { Text } from '@earendil-works/pi-tui';
 
 export const METRICS_ENTRY = 'pi-qol-metrics';
 export interface ResponseMetrics {
+  input?: number;
   output: number;
   ttftMs?: number;
   durationMs: number;
@@ -10,10 +11,10 @@ export interface ResponseMetrics {
   messageEntryId?: string;
 }
 
-export function calculateMetrics(output: number, durationMs: number, ttftMs?: number): ResponseMetrics {
+export function calculateMetrics(input: number, output: number, durationMs: number, ttftMs?: number): ResponseMetrics {
   const generationMs = ttftMs === undefined ? undefined : durationMs - ttftMs;
   return {
-    output, durationMs, ttftMs,
+    input, output, durationMs, ttftMs,
     tps: generationMs !== undefined && generationMs > 0 && output > 0 ? output * 1000 / generationMs : undefined,
   };
 }
@@ -21,7 +22,7 @@ export function calculateMetrics(output: number, durationMs: number, ttftMs?: nu
 export function formatMetrics(stats: ResponseMetrics): string {
   const tps = stats.tps === undefined ? 'n/a' : stats.tps.toFixed(1);
   const ttft = stats.ttftMs === undefined ? 'n/a' : `${(stats.ttftMs / 1000).toFixed(2)}s`;
-  return `${stats.output} tokens · ${tps} tok/s · TTFT ${ttft}`;
+  return `${stats.input ?? 'n/a'} input  ${stats.output} output  ${tps} tok/s  TTFT ${ttft}`;
 }
 
 function isReply(message: { role: string; content?: unknown; stopReason?: string }): boolean {
@@ -37,12 +38,16 @@ export default function metrics(pi: ExtensionAPI): void {
   let session: ExtensionContext['sessionManager'] | undefined;
 
   pi.registerEntryRenderer<ResponseMetrics>(METRICS_ENTRY, (entry, _options, theme) => {
-    const stats = entry.data;
+    let stats = entry.data;
     if (!stats) return undefined;
     // Hide old statistics attached to tool-call messages when sessions are resumed.
     if (stats.messageEntryId && session) {
       const source = session.getEntry(stats.messageEntryId);
       if (source?.type !== 'message' || !isReply(source.message)) return undefined;
+      if (stats.input === undefined && source.message.role === 'assistant') {
+        const usage = source.message.usage;
+        stats = { ...stats, input: usage.input + usage.cacheRead + usage.cacheWrite };
+      }
     }
     return new Text(theme.fg('dim', formatMetrics(stats)), 0, 0);
   });
@@ -73,7 +78,7 @@ export default function metrics(pi: ExtensionAPI): void {
     if (event.message.role !== 'assistant') return;
     const message = event.message;
     const duration = started === undefined ? message.durationMs ?? 0 : performance.now() - started;
-    pending = isReply(message) ? calculateMetrics(message.usage.output, duration,
+    pending = isReply(message) ? calculateMetrics(message.usage.input + message.usage.cacheRead + message.usage.cacheWrite, message.usage.output, duration,
       started !== undefined && first !== undefined ? first - started : undefined) : undefined;
     started = first = undefined;
   });

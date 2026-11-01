@@ -21,14 +21,14 @@ function harness() {
 const message = { role: 'assistant', content: [{ type: 'text', text: 'Hello' }],
   usage: { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 }, durationMs: 2000 };
 
-test('rate excludes first-token latency and displays only message output tokens', () => {
-  expect(calculateMetrics(20, 2500, 500).tps).toBe(10);
-  expect(calculateMetrics(20, 0, 0).tps).toBeUndefined();
-  expect(calculateMetrics(20, 2500).tps).toBeUndefined();
-  expect(formatMetrics(calculateMetrics(20, 2500, 500))).toBe('20 tokens · 10.0 tok/s · TTFT 0.50s');
+test('rate excludes first-token latency and displays separate input and output counts without dot separators', () => {
+  expect(calculateMetrics(80, 20, 2500, 500).tps).toBe(10);
+  expect(calculateMetrics(80, 20, 0, 0).tps).toBeUndefined();
+  expect(calculateMetrics(80, 20, 2500).tps).toBeUndefined();
+  expect(formatMetrics(calculateMetrics(80, 20, 2500, 500))).toBe('80 input  20 output  10.0 tok/s  TTFT 0.50s');
 });
 
-test('records a final reply once, excludes input tokens and model context, and never sets a footer', () => {
+test('records a final reply once, keeps counts separate and excludes statistics from model context, and never sets a footer', () => {
   const h = harness();
   h.fire('session_start');
   h.fire('before_provider_request');
@@ -40,7 +40,7 @@ test('records a final reply once, excludes input tokens and model context, and n
   h.fire('agent_end');
   expect(h.rows).toHaveLength(1);
   expect(h.rows[0]).toMatchObject({ output: 20, messageEntryId: 'assistant-id' });
-  expect(h.rows[0].input).toBeUndefined();
+  expect(h.rows[0].input).toBe(80);
   expect(h.rows[0].ttftMs).toBeNumber();
   expect(h.manager.buildSessionContext().messages).toEqual([]);
   expect(h.manager.getEntries()[0]).toMatchObject({ type: 'custom', customType: METRICS_ENTRY });
@@ -77,13 +77,14 @@ test('tool turns followed by a final reply produce just one statistics row', () 
   expect(h.rows[0].messageEntryId).toBe('reply');
 });
 
-test('resumed legacy tool statistics are hidden and final statistics use output counts', () => {
+test('resumed legacy tool statistics are hidden and final statistics show separate counts', () => {
   const h = harness();
   h.fire('session_start');
   const toolId = h.manager.appendMessage({ ...message, stopReason: 'toolUse' } as any);
   const replyId = h.manager.appendMessage(message as any);
   expect(h.render({ input: 7500, output: 56, messageEntryId: toolId })).toBeUndefined();
-  expect(h.render({ input: 7724, output: 164, messageEntryId: replyId })).toEqual(['164 tokens · n/a tok/s · TTFT n/a']);
+  expect(h.render({ input: 7724, output: 164, messageEntryId: replyId })).toEqual(['7724 input  164 output  n/a tok/s  TTFT n/a']);
+  expect(h.render({ output: 20, messageEntryId: replyId })).toEqual(['80 input  20 output  n/a tok/s  TTFT n/a']);
 });
 
 test('empty deltas do not establish TTFT and aborted text replies still get a row', () => {

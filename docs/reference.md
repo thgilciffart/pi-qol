@@ -2,11 +2,12 @@
 
 ## Response statistics
 
-Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics.
+Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics. Each row labels input and output separately and uses spaces between values, without dot separators or a combined token total.
 
 | Value | Definition |
 | --- | --- |
-| Tokens | Provider-reported output tokens for that reply, including reasoning tokens when the provider counts them. Input context and cache tokens are excluded. |
+| Input | Provider-reported input, cache-read, and cache-write tokens for this response, added together. |
+| Output | Provider-reported output tokens for this reply, including reasoning tokens when the provider counts them. |
 | TTFT | Time from Pi's `before_provider_request` event to the first nonempty text, thinking, or tool-call delta. |
 | Tokens per second | Output tokens divided by the elapsed seconds after the first delta and before `message_end`. |
 
@@ -14,7 +15,7 @@ The clock is monotonic. TTFT includes request and network latency. Stream chunks
 
 Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Token counts use provider usage reports rather than local tokenization.
 
-Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with output counts only. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
+Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with separate input and output counts. If a statistics entry lacks input usage, the renderer reads the original assistant message when available. Otherwise, input displays `n/a`. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
 
 ## Commands
 

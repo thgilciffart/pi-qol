@@ -22,6 +22,7 @@ function clean(value: string): string {
 /** A searchable thread list with selection and an inline deletion confirmation. */
 export class ThreadPicker implements Component, Focusable {
   private input = new Input();
+  private dateFormatter = new Intl.DateTimeFormat();
   private project: SessionInfo[];
   private all: SessionInfo[] | undefined;
   private scope: 'project' | 'all' = 'project';
@@ -53,6 +54,11 @@ export class ThreadPicker implements Component, Focusable {
       const groupOrder = this.grouping === 'date' ? right.localeCompare(left) : left.localeCompare(right);
       return groupOrder || b.modified.getTime() - a.modified.getTime() || a.path.localeCompare(b.path);
     });
+  }
+
+  private threadTitle(session: SessionInfo): string {
+    const date = Number.isFinite(session.modified.getTime()) ? this.dateFormatter.format(session.modified) : 'Unknown date';
+    return `${date}  ${clean(session.name || session.firstMessage || session.id)}`;
   }
 
   private groupLabel(session: SessionInfo): string {
@@ -185,7 +191,7 @@ export class ThreadPicker implements Component, Focusable {
       lines.push(theme.fg('warning', `Permanently delete ${this.confirmation.length} thread${this.confirmation.length === 1 ? '' : 's'}? This cannot be undone.`));
       lines.push(theme.fg('dim', 'enter confirm · n back · esc exit'), '');
       for (const session of this.confirmation.slice(0, this.pageSize())) {
-        lines.push(`  ${clean(session.name || session.firstMessage || session.id)}`);
+        lines.push(`  ${this.threadTitle(session)}`);
       }
       if (this.confirmation.length > this.pageSize()) lines.push(`  … ${this.confirmation.length - this.pageSize()} more selected`);
     } else {
@@ -203,7 +209,7 @@ export class ThreadPicker implements Component, Focusable {
           continue;
         }
         const { session, index } = row;
-        const text = truncateToWidth(`${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} ${clean(session.name || session.firstMessage || session.id)}`, width);
+        const text = truncateToWidth(`${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} ${this.threadTitle(session)}`, width);
         lines.push(index === this.index ? theme.bg('selectedBg', theme.fg('accent', text)) : text);
       }
       if (rows.length > this.pageSize()) lines.push(theme.fg('dim', `${this.index + 1}/${sessions.length} threads`));

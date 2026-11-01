@@ -65,6 +65,8 @@ Press Escape to exit without deleting any unconfirmed selection. If no threads a
 
 Press Ctrl+G to cycle between ungrouped, date, and project views. Date groups use each thread's last-modified date in your local timezone. Project groups use the full project path.
 
+Each thread shows its last-modified date before its title, using the system locale and timezone.
+
 The picker stays open after deletion. Use `/delete-threads search text` to start with a search.
 
 ## Start an ephemeral chat

@@ -25,18 +25,18 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 test('renders only thread rows and search, without action menu entries', () => {
   const h = fixture();
   expect(h.text()).toContain('Delete threads (Current project)');
-  expect(h.text()).toContain('› [ ] Thread a');
+  expect(h.text()).toMatch(/› \[ \].*Thread a/);
   for (const action of ['Delete selected', 'Select all matches', 'Clear selection', 'Cancel']) expect(h.text()).not.toContain(action);
 });
 
 test('space and enter toggle the current thread and advance the cursor', () => {
   const h = fixture();
   h.picker.handleInput(' ');
-  expect(h.text()).toContain('[x] Thread a'); expect(h.text()).toContain('› [ ] Thread b');
+  expect(h.text()).toMatch(/\[x\].*Thread a/); expect(h.text()).toMatch(/› \[ \].*Thread b/);
   h.picker.handleInput('\r');
-  expect(h.text()).toContain('[x] Thread b'); expect(h.text()).toContain('› [ ] Thread c');
+  expect(h.text()).toMatch(/\[x\].*Thread b/); expect(h.text()).toMatch(/› \[ \].*Thread c/);
   h.picker.handleInput('\x1b[A'); h.picker.handleInput(' ');
-  expect(h.text()).toContain('[ ] Thread b'); expect(h.text()).toContain('› [ ] Thread c');
+  expect(h.text()).toMatch(/\[ \].*Thread b/); expect(h.text()).toMatch(/› \[ \].*Thread c/);
 });
 
 test('ctrl+d asks before deletion, n returns, and enter confirms the selected set', async () => {
@@ -57,7 +57,7 @@ test('ctrl+d without a selection asks about the focused thread', () => {
 
 test('tab cycles project and all, retaining selection and loading all only once', async () => {
   const h = fixture(); h.picker.handleInput(' '); h.picker.handleInput('\t'); await tick();
-  expect(h.text()).toContain('Delete threads (All projects)'); expect(h.text()).toContain('[x] Thread a');
+  expect(h.text()).toContain('Delete threads (All projects)'); expect(h.text()).toMatch(/\[x\].*Thread a/);
   expect(h.text()).toContain('Thread other');
   h.picker.handleInput('\t'); expect(h.text()).not.toContain('Thread other');
   h.picker.handleInput('\t'); expect(h.allLoads).toBe(1);
@@ -108,7 +108,7 @@ test('a failed deletion preserves selected threads and allows retry', async () =
     requestRender() {}, done() {}, deleteThreads: async () => { calls++; throw new Error('permission denied'); } });
   picker.handleInput(' '); picker.handleInput('\x04'); picker.handleInput('\r'); await tick();
   expect(picker.render(120).join('\n')).toContain('permission denied');
-  expect(picker.render(120).join('\n')).toContain('[x] Thread a');
+  expect(picker.render(120).join('\n')).toMatch(/\[x\].*Thread a/);
   picker.handleInput('\x04'); picker.handleInput('\r'); await tick(); expect(calls).toBe(2);
 });
 
@@ -128,7 +128,7 @@ test('partial file failures retain only the failed selections', async () => {
     requestRender() {}, done() {}, deleteThreads: async () => [session('a').path] });
   picker.handleInput('\x01'); picker.handleInput('\x04'); picker.handleInput('\r'); await tick();
   const text = picker.render(120).join('\n');
-  expect(text).not.toContain('Thread a'); expect(text).toContain('[x] Thread b'); expect(text).toContain('1 selected');
+  expect(text).not.toContain('Thread a'); expect(text).toMatch(/\[x\].*Thread b/); expect(text).toContain('1 selected');
 });
 
 function datedSession(id: string, cwd: string, day: number, hour = 12): SessionInfo {
@@ -147,14 +147,14 @@ test('Ctrl+G groups by local modified date, newest first, then project path', ()
   expect(text).toContain('ctrl+g group (date)');
   expect(text.indexOf('2025-01-02')).toBeLessThan(text.indexOf('2025-01-01'));
   expect(text.indexOf('Thread d')).toBeLessThan(text.indexOf('Thread b'));
-  expect(text.match(/2025-01-01/g)).toHaveLength(1);
-  expect(text).toContain('› [ ] Thread a');
+  expect(text.match(/^2025-01-01$/gm)).toHaveLength(1);
+  expect(text).toMatch(/› \[ \].*Thread a/);
   h.picker.handleInput('\x07'); text = h.text();
   expect(text).toContain('ctrl+g group (project)');
   expect(text.indexOf('/alpha')).toBeLessThan(text.indexOf('/zeta'));
   expect(text.indexOf('Thread b')).toBeLessThan(text.indexOf('Thread c'));
   expect(text.indexOf('Thread d')).toBeLessThan(text.indexOf('Thread a'));
-  expect(text).toContain('› [ ] Thread a');
+  expect(text).toMatch(/› \[ \].*Thread a/);
   h.picker.handleInput('\x07'); text = h.text();
   expect(text).toContain('ctrl+g group (none)');
   expect(text).not.toContain('/alpha'); expect(text).not.toContain('2025-01-01');
@@ -164,9 +164,9 @@ test('Ctrl+G groups by local modified date, newest first, then project path', ()
 test('group headings are skipped during selection, and grouping preserves deletion targets', async () => {
   const h = fixture([datedSession('a', '/alpha', 2), datedSession('b', '/beta', 1)]);
   h.picker.handleInput('\x07'); h.picker.handleInput(' ');
-  expect(h.text()).toContain('[x] Thread a'); expect(h.text()).toContain('› [ ] Thread b');
+  expect(h.text()).toMatch(/\[x\].*Thread a/); expect(h.text()).toMatch(/› \[ \].*Thread b/);
   h.picker.handleInput('\x07');
-  expect(h.text()).toContain('› [ ] Thread b');
+  expect(h.text()).toMatch(/› \[ \].*Thread b/);
   h.picker.handleInput('\r'); h.picker.handleInput('\x04');
   expect(h.text()).toContain('Permanently delete 2 threads?');
   h.picker.handleInput('\r'); await tick();
@@ -205,4 +205,24 @@ test('grouped scrolling repeats headings, keeps focus visible, and fits the row 
       }
     }
   }
+});
+
+
+test('thread rows show the system-formatted modified date before the title in every grouping', () => {
+  const thread = datedSession('dated', '/project', 2);
+  const h = fixture([thread]);
+  const expected = thread.modified.toLocaleDateString();
+  for (let mode = 0; mode < 3; mode++) {
+    expect(h.text()).toContain(`› [ ] ${expected}  Thread dated`);
+    h.picker.handleInput('\x07');
+  }
+  h.picker.handleInput('\x04');
+  expect(h.text()).toContain(`${expected}  Thread dated`);
+});
+
+test('threads without a valid modified date remain selectable', () => {
+  const h = fixture([{ ...session('unknown'), modified: new Date(NaN) }]);
+  expect(h.text()).toContain('Unknown date  Thread unknown');
+  h.picker.handleInput(' ');
+  expect(h.text()).toMatch(/\[x\].*Thread unknown/);
 });

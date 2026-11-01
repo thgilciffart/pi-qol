@@ -33,7 +33,7 @@ Deletion removes only the selected JSONL session files. Forked sessions, exports
 
 ## Thread picker keys
 
-The list contains thread rows and a search box. It has no action rows. Selection persists when the search, scope, or grouping changes. Ctrl+G cycles through ungrouped, date, and project views. Group headings are not selectable. Changing the grouping keeps the same thread highlighted.
+The list contains thread rows and a search box. Each thread row starts with its last-modified date before the title. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. It has no action rows. Selection persists when the search, scope, or grouping changes. Ctrl+G cycles through ungrouped, date, and project views. Group headings are not selectable. Changing the grouping keeps the same thread highlighted.
 
 | Key | Behavior |
 | --- | --- |

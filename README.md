@@ -64,6 +64,12 @@ Send a prompt. Each final assistant reply has a row with separate input and outp
 
 See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
 
+## Continue an interrupted turn
+
+If you accidentally press Escape, press **Ctrl+Alt+C** or run `/continue` to pick up the unfinished task. This starts a new model request with a hidden continuation cue, without adding a visible user message or clearing your editor draft.
+
+It does nothing while Pi is busy or input is queued. The cancelled stream itself cannot be reconnected. For paused goals, `/goal resume` remains the goal control.
+
 ## Work toward a goal
 
 Use `/goal` to keep Pi working toward a verifiable outcome across turns:
@@ -144,7 +150,7 @@ npm test
 npm pack --dry-run
 ```
 
-The tests cover automatic naming, goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
+The tests cover automatic naming, interrupted-turn continuation, goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
 
 See [Publish to npm](docs/publishing.md) for release commands and Pi package discovery.
 

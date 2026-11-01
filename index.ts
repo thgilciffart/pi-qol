@@ -5,6 +5,7 @@ import metrics from './src/metrics.ts';
 import goal from './src/goal.ts';
 import threads from './src/threads.ts';
 import autoName from './src/auto-name.ts';
+import continueTurn from './src/continue.ts';
 
 export default function qol(pi: ExtensionAPI): void {
   ephemeral(pi);
@@ -13,4 +14,5 @@ export default function qol(pi: ExtensionAPI): void {
   goal(pi);
   threads(pi);
   autoName(pi);
+  continueTurn(pi);
 }

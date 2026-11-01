@@ -60,6 +60,8 @@ Pi starts work immediately and continues after completed turns while the goal is
 
 Run `/goal` to see the objective and usage. Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Escape pauses an interrupted goal. Use `/goal edit <objective>` to revise it, or `/goal edit` to open an editor.
 
+The agent can also infer a pause from a break, a change of focus, or a necessary user decision. It explains the pause. Use `/goal resume` to continue.
+
 Goals persist with the session and survive compaction. Reopened sessions restore goals paused. Run `/goal resume` to continue. Ephemeral chats keep their goals in memory.
 
 See the [goal reference and Codex sources](docs/goals.md) for budget accounting, continuation guards, and differences from Codex.

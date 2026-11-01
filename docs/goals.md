@@ -39,7 +39,9 @@ The extension registers `get_goal`, `create_goal`, and `update_goal` with Pi.
 
 `get_goal` returns the current goal and remaining tokens. `create_goal` accepts an `objective` and optional `token_budget`. Its instructions permit creation only on an explicit user request. It refuses to replace an unfinished goal.
 
-`update_goal` accepts `complete`, `blocked`, or `paused`. Its instructions require evidence for every requirement before completion. Blocking requires the same genuine blocker to persist for at least three consecutive goal turns with no useful action available. The extension enforces a minimum of three turns; the model audits whether the blocker remained the same. Pausing requires an explicit user request. The tool cannot resume a goal or change its budget.
+`update_goal` accepts `complete`, `blocked`, or `paused`. Its instructions require evidence for every requirement before completion. Blocking requires the same genuine blocker to persist for at least three consecutive goal turns with no useful action available. The extension enforces a minimum of three turns; the model audits whether the blocker remained the same.
+
+The agent can infer a pause when the conversation indicates a break, a change of focus, or a necessary user decision. An explicit pause request is not required. The agent must explain the pause and must not pause merely because work is hard, slow, or incomplete. The tool cannot resume a goal or change its budget. Use `/goal resume` to continue.
 
 Goal tools return usage so the agent can report consumed tokens after completing a budgeted goal. Completion and blocker assessments depend on the model's evidence audit.
 
@@ -77,4 +79,4 @@ The relevant upstream files are:
 - [Composer indicator labels and right-side placement](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/tui/src/bottom_pane/footer.rs).
 - [Indicator usage and elapsed time](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/tui/src/chatwidget/goal_status.rs).
 
-Pi stores goals in session entries instead of Codex's thread database. This port supports in-memory chats, adds `--tokens` and `budget` command syntax, and requires explicit resume after history restoration. It does not implement Codex-specific plan mode admission, account usage-limit detection, descendant-agent accounting, or goal attachments. Errors use the `blocked` status because Pi does not expose Codex's account-limit classification.
+Pi stores goals in session entries instead of Codex's thread database. This port supports in-memory chats, allows the agent to infer pauses, adds `--tokens` and `budget` command syntax, and requires explicit resume after history restoration. It does not implement Codex-specific plan mode admission, account usage-limit detection, descendant-agent accounting, or goal attachments. Errors use the `blocked` status because Pi does not expose Codex's account-limit classification.

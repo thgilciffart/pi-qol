@@ -47,8 +47,9 @@ function goalInstructions(goal: Goal): string {
     'Before calling update_goal with status complete, audit every requirement and confirm no required work remains. ' +
     'Do not redefine success around partial work or mark complete because a budget is nearly exhausted. ' +
     'Call update_goal with status blocked only after the same genuine blocker persists for at least three consecutive goal turns and no useful action remains. ' +
-    'Resuming resets that blocked audit. Pause only on an explicit user request. ' +
-    'A new user message steers the ongoing goal unless it explicitly replaces or cancels it. ' +
+    'Resuming resets that blocked audit. You may infer a pause from the conversation, such as a break, a change of focus, or a necessary user decision before work can continue. ' +
+    'Call update_goal with status paused and explain why. Do not pause merely because work is hard, slow, or incomplete. Only the user can resume a paused goal. ' +
+    'A new user message steers the ongoing goal unless it replaces or cancels it, or implies a pause. ' +
     'When a budgeted goal completes, report the consumed tokens returned by update_goal.';
 }
 
@@ -221,7 +222,7 @@ export default function goals(pi: ExtensionAPI): void {
   });
   pi.registerTool({
     name: 'update_goal', label: 'Update goal',
-    description: 'Mark complete only after evidence proves every requirement is achieved. Mark blocked only after the same blocker persists for at least three consecutive goal turns with no useful action available. Pause only on an explicit user request. Never resume or change budgets with this tool. Report final token usage when a budgeted goal completes.',
+    description: 'Mark complete only after evidence proves every requirement is achieved. Mark blocked only after the same blocker persists for at least three consecutive goal turns with no useful action available. You may pause implicitly when the conversation indicates a break, a change of focus, or a necessary user decision. Explain the pause. Do not pause merely because work is hard, slow, or incomplete. Never resume or change budgets with this tool. Report final token usage when a budgeted goal completes.',
     parameters: Type.Object({ status: Type.Union([Type.Literal('complete'), Type.Literal('blocked'), Type.Literal('paused')]) }),
     execute: async (_id, args, _signal, _onUpdate, ctx) => {
       if (!goal) throw new Error('This session has no goal.');

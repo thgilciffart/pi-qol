@@ -22,10 +22,7 @@ export default function continueTurn(pi: ExtensionAPI): void {
     }
     pi.sendMessage({
       customType: CONTINUE_MESSAGE,
-      content: 'The user requested continuing the most recent unfinished turn after an interruption. ' +
-        'Continue the existing task from the current conversation and work state. Preserve the original instructions and constraints. ' +
-        'Check the current state of interrupted tools or processes before repeating operations, and avoid repeating completed work. ' +
-        'If the task is already complete, report that rather than inventing new work.',
+      content: 'Continue the unfinished task from where you left off.',
       display: false,
     }, { triggerTurn: true });
   }

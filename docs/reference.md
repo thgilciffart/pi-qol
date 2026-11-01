@@ -22,6 +22,7 @@ Statistics rows persist as custom session entries and never enter model context.
 
 | Command | Behavior |
 | --- | --- |
+| `/goal [objective]` | Shows the current goal, or sets an objective and starts work. See the [goal reference](goals.md) for lifecycle and budget commands. |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
 | `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |
 | `/ephemeral [prompt]` | Starts a new in-memory chat after confirmation. Sends the optional prompt into the new chat. An already ephemeral chat remains active. |

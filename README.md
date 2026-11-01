@@ -1,6 +1,6 @@
 # pi-qol
 
-A quality of life extension for [Pi](https://pi.dev). It adds response statistics, thread deletion, ephemeral chats, and HTML exports from `pi-better-export`.
+A quality of life extension for [Pi](https://pi.dev). It adds persistent goals, response statistics, thread deletion, ephemeral chats, and HTML exports from `pi-better-export`.
 
 ## Install
 
@@ -46,6 +46,23 @@ To try the extension without installing it, run `pi -e ./index.ts` from this dir
 Send a prompt. Each final assistant reply has a row with separate input and output token counts, tokens per second, TTFT, and cost in USD. Tool-call messages have no statistics row. Statistics appear only in the transcript.
 
 See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
+
+## Work toward a goal
+
+Use `/goal` to keep Pi working toward a verifiable outcome across turns:
+
+```text
+/goal Make the checkout tests pass without changing the public API
+/goal --tokens 50000 Reduce benchmark latency below 120 ms and verify correctness
+```
+
+Pi starts work immediately and continues after completed turns while the goal is active. The footer shows its status and token usage. The agent marks the goal complete after verifying the outcome.
+
+Run `/goal` to see the objective and usage. Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Escape pauses an interrupted goal. Use `/goal edit <objective>` to revise it, or `/goal edit` to open an editor.
+
+Goals persist with the session and survive compaction. Reopened sessions restore goals paused. Run `/goal resume` to continue. Ephemeral chats keep their goals in memory.
+
+See the [goal reference and Codex sources](docs/goals.md) for budget accounting, continuation guards, and differences from Codex.
 
 ## Delete threads
 
@@ -106,7 +123,7 @@ npm test
 npm pack --dry-run
 ```
 
-The tests cover response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and do not delete your saved chats.
+The tests cover goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
 
 See [Publish to npm](docs/publishing.md) for release commands and Pi package discovery.
 

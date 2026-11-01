@@ -1,7 +1,7 @@
 {
   "name": "@thgilciffart/pi-qol",
   "version": "0.1.0",
-  "description": "Response metrics, session deletion, ephemeral chats, and HTML exports for Pi",
+  "description": "Persistent goals, response metrics, session deletion, ephemeral chats, and HTML exports for Pi",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -15,6 +15,7 @@
     "pi-package",
     "pi-extension",
     "qol",
+    "goals",
     "metrics",
     "sessions",
     "ephemeral",
@@ -32,7 +33,8 @@
   },
   "dependencies": {
     "katex": "^0.19.0",
-    "open": "^10.2.0"
+    "open": "^10.2.0",
+    "typebox": "1.3.27"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

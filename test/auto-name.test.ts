@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
+import { SessionManager, initTheme } from '@earendil-works/pi-coding-agent';
 import autoName, {
   DEFAULT_AUTO_NAME_SETTINGS,
   DEFAULT_TITLE_PROMPT,
@@ -10,6 +10,8 @@ import autoName, {
   readAutoNameSettings,
   writeAutoNameSettings,
 } from '../src/auto-name.ts';
+
+initTheme('dark');
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -40,6 +42,8 @@ async function harness(options: { existing?: string; name?: string; settings?: R
   const choices: ((choices: string[]) => string | undefined)[] = [];
   const editors: string[] = [];
   const editorResults: (string | undefined)[] = [];
+  const customActions: ((component: any) => void)[] = [];
+  const customComponents: any[] = [];
   let generate = async () => reply();
   const current = { provider: 'test', id: 'chat', name: 'Chat model', reasoning: true, input: ['text'], contextWindow: 100000, maxTokens: 8192 };
   const other = { ...current, provider: 'other', id: 'vendor/title-model', name: 'Title model' };
@@ -47,6 +51,8 @@ async function harness(options: { existing?: string; name?: string; settings?: R
     getAll: () => [current, other], getAvailable: () => [current, other],
     find: (provider: string, id: string) => [current, other].find(model => model.provider === provider && model.id === id),
     hasConfiguredAuth: () => true,
+    getError: () => undefined,
+    refresh: async () => ({ errors: new Map(), aborted: false }),
     getProviderDisplayName: (provider: string) => provider,
     streamSimple: (model: any, context: any, requestOptions: any) => {
       requests.push({ model, context, options: requestOptions });
@@ -61,10 +67,19 @@ async function harness(options: { existing?: string; name?: string; settings?: R
     },
     editor: async (_title: string, initial: string) => { editors.push(initial); return editorResults.shift(); },
     input: async () => undefined,
+    custom: async (factory: any) => new Promise(resolve => {
+      let component: any;
+      const done = (value: unknown) => { component?.dispose?.(); resolve(value); };
+      component = factory({ terminal: { rows: 40, columns: 120 }, requestRender: () => {} }, {}, {}, done);
+      customComponents.push(component);
+      const action = customActions.shift();
+      if (action) action(component);
+      else component.handleInput('\x1b');
+    }),
   };
   function ctx() {
     return { mode: 'tui', hasUI: true, cwd: dir, sessionManager: manager,
-      model: current, thinkingLevel: 'high', modelRegistry, ui, isIdle: () => false,
+      model: current, thinkingLevel: 'high', scopedModels: [{ model: current }, { model: other }], modelRegistry, ui, isIdle: () => false,
       hasPendingMessages: () => false };
   }
   const pi = {
@@ -91,7 +106,7 @@ async function harness(options: { existing?: string; name?: string; settings?: R
     manager.appendMessage(message);
     await flush();
   }
-  return { dir, configPath, commands, requests, names, notifications, selections, choices, editors, editorResults,
+  return { dir, configPath, commands, requests, names, notifications, selections, choices, editors, editorResults, customActions, customComponents,
     current, other, emit, flush, user,
     manager: () => manager,
     setGenerator: (fn: typeof generate) => { generate = fn; },
@@ -289,7 +304,7 @@ describe('/auto-name configuration', () => {
   test('model and effort pickers and the prompt editor save their selections', async () => {
     const h = await harness();
     try {
-      h.choices.push(entries => entries.find(value => value.includes('other/vendor/title-model')));
+      h.customActions.push(component => { component.handleInput('title-model'); component.handleInput('\r'); });
       await h.command('model');
       h.choices.push(entries => entries.find(value => value === 'medium' || value.startsWith('medium ')));
       await h.command('effort');
@@ -308,6 +323,7 @@ describe('/auto-name configuration', () => {
     try {
       await h.command();
       expect(h.selections.length).toBeGreaterThan(0);
+      expect(h.selections[0].choices).not.toContain('Show settings');
       await h.command('', false);
       expect(h.notifications.at(-1)?.message).toMatch(/model|effort|enabled|automatic/i);
     } finally { await h.cleanup(); }
@@ -318,11 +334,55 @@ describe('/auto-name configuration', () => {
     try {
       await h.command('effort low');
       const previous = await readAutoNameSettings(h.configPath);
-      h.choices.push(() => undefined);
       await h.command('model');
       h.editorResults.push(undefined);
       await h.command('prompt');
       expect(await readAutoNameSettings(h.configPath)).toEqual(previous);
+    } finally { await h.cleanup(); }
+  });
+
+  test('Escape in model, effort, and prompt subviews returns to the main settings menu', async () => {
+    const h = await harness();
+    try {
+      h.choices.push(
+        entries => entries.find(value => value.startsWith('Model:')),
+        entries => entries.find(value => value.startsWith('Effort:')),
+        () => undefined,
+        entries => entries.find(value => /prompt/i.test(value)),
+        () => undefined,
+      );
+      h.customActions.push(component => component.handleInput('\x1b'));
+      h.editorResults.push(undefined);
+      await h.command();
+      expect(h.selections.filter(selection => selection.title === 'Automatic thread naming')).toHaveLength(4);
+      expect(h.selections.some(selection => selection.title === 'Naming effort')).toBe(true);
+      expect(h.editors).toHaveLength(1);
+      expect(h.customComponents).toHaveLength(1);
+      expect(h.notifications).toHaveLength(0);
+    } finally { await h.cleanup(); }
+  });
+
+  test('one menu visit can save several changes without full settings notifications', async () => {
+    const h = await harness();
+    try {
+      h.choices.push(
+        entries => entries.find(value => value.startsWith('Effort:')),
+        entries => entries.find(value => value === 'low'),
+        entries => entries.find(value => /prompt/i.test(value)),
+        entries => entries.find(value => value.startsWith('Automatic naming:')),
+        () => undefined,
+      );
+      h.editorResults.push('Prefer a short action title.');
+      await h.command();
+      expect(await readAutoNameSettings(h.configPath)).toMatchObject({ enabled: false, effort: 'low', prompt: 'Prefer a short action title.' });
+      const menus = h.selections.filter(selection => selection.title === 'Automatic thread naming');
+      expect(menus).toHaveLength(4);
+      expect(menus.at(-1)?.choices).toContain('Automatic naming: off');
+      expect(menus.at(-1)?.choices).toContain('Effort: low');
+      expect(menus.every(menu => !menu.choices.includes('Show settings'))).toBe(true);
+      expect(h.notifications).toHaveLength(0);
+      await h.command('status');
+      expect(h.notifications.at(-1)?.message).toContain('Effort: low');
     } finally { await h.cleanup(); }
   });
 });

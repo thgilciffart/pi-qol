@@ -15,14 +15,16 @@ Naming makes a separate request through Pi's configured model provider. It does 
 
 ## Commands
 
-`/auto-name` opens the settings menu in an interactive UI. Without a UI, it displays current settings.
+`/auto-name` opens the settings menu in an interactive UI. Changes return to the menu. Escape from the model picker, effort picker, or prompt editor goes back to settings. Escape at the settings menu closes it. Without a UI, the command displays current settings.
+
+The terminal model picker uses Pi's built-in search and model list. Type to search and press Tab to switch between All and Scoped when scoped models are configured. Enter or Ctrl+S saves the selected naming model. This does not change the chat model or its default. `/auto-name model current` restores following the chat model.
 
 | Command | Behavior |
 | --- | --- |
 | `/auto-name status` | Shows enabled state, model, effort, and a prompt preview. |
 | `/auto-name on` | Enables automatic naming for new threads. |
 | `/auto-name off` | Disables automatic naming and cancels a pending naming request. |
-| `/auto-name model` | Opens a picker of available models. |
+| `/auto-name model` | Opens Pi's searchable model picker with All/Scoped switching in the terminal UI. |
 | `/auto-name model provider/model-id` | Selects a model registered with Pi. Model IDs can contain additional slashes. |
 | `/auto-name model current` | Uses the chat model selected when the first message arrives. |
 | `/auto-name effort` | Opens the effort picker. |

@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { getAgentDir, type ExtensionAPI, type ExtensionCommandContext, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { stripTerminalSequences } from '@earendil-works/pi-tui';
+import { pickNamingModel } from './auto-name-picker.ts';
 
 const EFFORTS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export const DEFAULT_TITLE_PROMPT = 'Write a concise, specific title for this coding conversation based on the first user message. Use 3 to 7 words in the user\'s language. Describe the task or topic. Return only the title, without quotes, Markdown, or an explanation.';
@@ -103,12 +104,12 @@ export default function autoName(pi: ExtensionAPI, options: { configPath?: strin
     return settingsReady ??= readAutoNameSettings(configPath).then(value => { settings = value; });
   }
 
-  async function save(next: AutoNameSettings, ctx: ExtensionContext): Promise<void> {
+  async function save(next: AutoNameSettings, ctx: ExtensionContext, announce = true): Promise<void> {
     await writeAutoNameSettings(configPath, next);
     cancel();
     settings = { ...next };
     settingsReady = Promise.resolve();
-    ctx.ui.notify(settingsSummary(settings), 'info');
+    if (announce) ctx.ui.notify(settingsSummary(settings), 'info');
   }
 
   async function generate(text: string, ctx: ExtensionContext, announce = false): Promise<void> {
@@ -160,38 +161,37 @@ export default function autoName(pi: ExtensionAPI, options: { configPath?: strin
       }
       return value;
     }
-    if (!ctx.hasUI) throw new Error('Usage: /auto-name model <provider/model|current>');
-    const models = ctx.modelRegistry.getAvailable().map(model => `${model.provider}/${model.id}`);
-    const current = 'current (use the chat model)';
-    const selected = await ctx.ui.select('Naming model', [current, ...new Set(models)]);
-    return selected === current ? 'current' : selected;
+    return pickNamingModel(ctx, settings.model);
   }
 
-  async function configure(args: string, ctx: ExtensionCommandContext): Promise<void> {
+  async function configure(args: string, ctx: ExtensionCommandContext, fromMenu = false): Promise<void> {
     const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(args.trim());
-    let action = match?.[1] ?? '';
+    const action = match?.[1] ?? '';
     const value = match?.[2]?.trim() ?? '';
     // Reset also repairs missing or malformed configuration files.
-    if (action === 'reset') { await save({ ...DEFAULT_AUTO_NAME_SETTINGS }, ctx); return; }
+    if (action === 'reset') { await save({ ...DEFAULT_AUTO_NAME_SETTINGS }, ctx, !fromMenu); return; }
     await loadSettings();
     if (!action && ctx.hasUI) {
-      const actions = new Map([
-        [`Automatic naming: ${settings.enabled ? 'on' : 'off'}`, settings.enabled ? 'off' : 'on'],
-        [`Model: ${settings.model}`, 'model'], [`Effort: ${settings.effort}`, 'effort'],
-        ['Edit naming prompt', 'prompt'], ['Show settings', 'status'],
-        ['Rename this thread now', 'now'], ['Reset to defaults', 'reset'],
-      ]);
-      const selected = await ctx.ui.select('Automatic thread naming', [...actions.keys()]);
-      if (!selected) return;
-      action = actions.get(selected) ?? '';
+      while (true) {
+        const actions = new Map([
+          [`Automatic naming: ${settings.enabled ? 'on' : 'off'}`, settings.enabled ? 'off' : 'on'],
+          [`Model: ${settings.model}`, 'model'], [`Effort: ${settings.effort}`, 'effort'],
+          ['Edit naming prompt', 'prompt'], ['Rename this thread now', 'now'], ['Reset to defaults', 'reset'],
+        ]);
+        const selected = await ctx.ui.select('Automatic thread naming', [...actions.keys()]);
+        if (!selected) return;
+        const nextAction = actions.get(selected);
+        if (!nextAction) return;
+        try { await configure(nextAction, ctx, true); }
+        catch (error) { ctx.ui.notify(`Auto-name: ${error instanceof Error ? error.message : String(error)}`, 'error'); }
+      }
     }
     switch (action) {
       case '': case 'status': ctx.ui.notify(settingsSummary(settings), 'info'); return;
-      case 'on': case 'off': await save({ ...settings, enabled: action === 'on' }, ctx); return;
-      case 'reset': await save({ ...DEFAULT_AUTO_NAME_SETTINGS }, ctx); return;
+      case 'on': case 'off': await save({ ...settings, enabled: action === 'on' }, ctx, !fromMenu); return;
       case 'model': {
         const model = await chooseModel(value, ctx);
-        if (model !== undefined) await save({ ...settings, model }, ctx);
+        if (model !== undefined) await save({ ...settings, model }, ctx, !fromMenu);
         return;
       }
       case 'effort': {
@@ -201,7 +201,7 @@ export default function autoName(pi: ExtensionAPI, options: { configPath?: strin
           return;
         }
         if (!EFFORTS.includes(effort as AutoNameSettings['effort'])) throw new Error(`Choose an effort: ${EFFORTS.join(', ')}.`);
-        await save({ ...settings, effort: effort as AutoNameSettings['effort'] }, ctx);
+        await save({ ...settings, effort: effort as AutoNameSettings['effort'] }, ctx, !fromMenu);
         return;
       }
       case 'prompt': {
@@ -211,7 +211,7 @@ export default function autoName(pi: ExtensionAPI, options: { configPath?: strin
           if (!ctx.hasUI) ctx.ui.notify(settings.prompt, 'info');
           return;
         }
-        await save(validateSettings({ ...settings, prompt }), ctx);
+        await save(validateSettings({ ...settings, prompt }), ctx, !fromMenu);
         return;
       }
       case 'now': {

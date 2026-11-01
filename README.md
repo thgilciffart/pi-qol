@@ -45,7 +45,7 @@ To try the extension without installing it, run `pi -e ./index.ts` from this dir
 
 Send the first message in a new chat. Pi generates a short thread name in the background using the current chat model, reasoning off, and a built-in naming prompt. Existing threads and manual names stay unchanged.
 
-Run `/auto-name` to configure the model, effort, and prompt. You can also use direct commands:
+Run `/auto-name` to configure the model, effort, and prompt. The model picker supports search and Tab to switch All/Scoped. Escape from a submenu returns to settings. You can also use direct commands:
 
 ```text
 /auto-name model provider/model-id

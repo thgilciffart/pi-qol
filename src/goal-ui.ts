@@ -4,7 +4,7 @@ import type { Goal } from './goal.ts';
 
 type EditorFactory = NonNullable<Parameters<ExtensionContext['ui']['setEditorComponent']>[0]>;
 
-function compactTokens(value: number): string {
+export function compactTokens(value: number): string {
   if (value < 1000) return String(value);
   const [scale, suffix] = value >= 999_500_000_000 ? [1e12, 'T'] : value >= 999_500_000 ? [1e9, 'B'] :
     value >= 999_500 ? [1e6, 'M'] : [1000, 'K'];

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
-import { createGoalUI } from './goal-ui.ts';
+import { compactTokens, createGoalUI } from './goal-ui.ts';
 
 export const GOAL_ENTRY = 'pi-qol-goal';
 const CONTINUATION = 'pi-qol-goal-continuation';
@@ -29,9 +29,16 @@ function validateBudget(budget: number): number {
 }
 
 export function formatGoal(goal: Goal): string {
-  return `Goal: ${goal.status}\n${goal.objective}\nTokens used: ${goal.tokensUsed}` +
-    (goal.tokenBudget === undefined ? '' : ` / ${goal.tokenBudget}`) +
-    `\nTime used: ${(goal.timeUsedMs / 1000).toFixed(1)}s`;
+  const seconds = Math.max(0, Math.round(goal.timeUsedMs / 1000));
+  const duration = [
+    [Math.floor(seconds / 86400), 'd'],
+    [Math.floor(seconds / 3600) % 24, 'h'],
+    [Math.floor(seconds / 60) % 60, 'm'],
+    [seconds % 60, 's'],
+  ].filter(([value]) => value !== 0).map(([value, unit]) => `${value}${unit}`).join(' ') || '0s';
+  return `Goal: ${goal.status}\n${goal.objective}\nTokens used: ${compactTokens(goal.tokensUsed)}` +
+    (goal.tokenBudget === undefined ? '' : ` / ${compactTokens(goal.tokenBudget)}`) +
+    `\nTime used: ${duration}`;
 }
 
 function goalInstructions(goal: Goal): string {
@@ -122,7 +129,7 @@ export default function goals(pi: ExtensionAPI): void {
   }
 
   pi.registerCommand('goal', {
-    description: 'Set a persistent goal, or show/edit/pause/resume/clear it; --tokens N sets a budget',
+    description: 'Set or view the goal for a long-running task',
     getArgumentCompletions: (prefix) => {
       const matches = ['pause', 'resume', 'clear', 'edit', 'budget'].filter(value => value.startsWith(prefix));
       return matches.length ? matches.map(value => ({ value, label: value })) : null;

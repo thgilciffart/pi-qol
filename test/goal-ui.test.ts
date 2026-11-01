@@ -8,22 +8,22 @@ const goal: Goal = { id: 'test', objective: 'Finish it', status: 'active', token
 
 describe('Codex-style goal indicator', () => {
   test('matches active, paused, stalled, budget, and achieved labels', () => {
-    expect(formatGoalIndicator(goal)).toBe('Pursuing goal (2m)');
-    expect(formatGoalIndicator({ ...goal, tokenBudget: 50000 })).toBe('Pursuing goal (12.5K / 50K)');
-    expect(formatGoalIndicator({ ...goal, status: 'paused' })).toBe('Goal paused (/goal resume)');
-    expect(formatGoalIndicator({ ...goal, status: 'blocked' })).toBe('Goal stalled (/goal resume)');
+    expect(formatGoalIndicator(goal)).toBe('Pursuing goal (2m, 12.5K tokens)');
+    expect(formatGoalIndicator({ ...goal, tokenBudget: 50000 })).toBe('Pursuing goal (12.5K / 50K tokens)');
+    expect(formatGoalIndicator({ ...goal, status: 'paused' })).toBe('Goal paused (12.5K tokens, /goal resume)');
+    expect(formatGoalIndicator({ ...goal, status: 'blocked' })).toBe('Goal stalled (12.5K tokens, /goal resume)');
     expect(formatGoalIndicator({ ...goal, status: 'budget_limited', tokensUsed: 63876, tokenBudget: 50000 }))
       .toBe('Goal unmet (63.9K / 50K tokens)');
-    expect(formatGoalIndicator({ ...goal, status: 'complete' })).toBe('Goal achieved (2m)');
+    expect(formatGoalIndicator({ ...goal, status: 'complete' })).toBe('Goal achieved (2m, 12.5K tokens)');
     expect(formatGoalIndicator({ ...goal, status: 'complete', tokenBudget: 50000 })).toBe('Goal achieved (12.5K tokens)');
   });
 
   test('compacts large token counts and elapsed times', () => {
-    expect(formatGoalIndicator({ ...goal, tokensUsed: 8082943, tokenBudget: 10000000 })).toBe('Pursuing goal (8.08M / 10M)');
-    expect(formatGoalIndicator({ ...goal, tokensUsed: 999500, tokenBudget: 1000000 })).toBe('Pursuing goal (1M / 1M)');
-    expect(formatGoalIndicator({ ...goal, timeUsedMs: 59000 })).toBe('Pursuing goal (59s)');
-    expect(formatGoalIndicator({ ...goal, timeUsedMs: 36720000 })).toBe('Pursuing goal (10h 12m)');
-    expect(formatGoalIndicator({ ...goal, timeUsedMs: 86400000 })).toBe('Pursuing goal (1d 0h 0m)');
+    expect(formatGoalIndicator({ ...goal, tokensUsed: 8082943, tokenBudget: 10000000 })).toBe('Pursuing goal (8.08M / 10M tokens)');
+    expect(formatGoalIndicator({ ...goal, tokensUsed: 999500, tokenBudget: 1000000 })).toBe('Pursuing goal (1M / 1M tokens)');
+    expect(formatGoalIndicator({ ...goal, timeUsedMs: 59000 })).toBe('Pursuing goal (59s, 12.5K tokens)');
+    expect(formatGoalIndicator({ ...goal, timeUsedMs: 36720000 })).toBe('Pursuing goal (10h 12m, 12.5K tokens)');
+    expect(formatGoalIndicator({ ...goal, timeUsedMs: 86400000 })).toBe('Pursuing goal (1d 0h 0m, 12.5K tokens)');
   });
 
   test('right-aligns inside the top border and preserves Working, input, and other rows', () => {
@@ -72,10 +72,10 @@ describe('Codex-style goal indicator', () => {
     const presentation = createGoalUI(() => ({ goal: current, running: false }));
     presentation.update(ctx);
     expect(installed).not.toBe(originalFactory);
-    expect(editor.render(80)[0]).toEndWith(' Pursuing goal (2m) ─');
+    expect(editor.render(80)[0]).toEndWith(' Pursuing goal (2m, 12.5K tokens) ─');
     current = { ...goal, status: 'paused' };
     presentation.update(ctx);
-    expect(editor.render(80)[0]).toEndWith(' Goal paused (/goal resume) ─');
+    expect(editor.render(80)[0]).toEndWith(' Goal paused (12.5K tokens, /goal resume) ─');
     current = undefined;
     presentation.update(ctx);
     expect(editor.render(80)).toEqual(['─'.repeat(80), 'draft']);
@@ -115,7 +115,7 @@ describe('Codex-style goal indicator', () => {
     editor.setWorkingStatusIndicator({ renderInBorder: () => 'Working', renderSpinnerInBorder: () => '*' });
     const rendered = editor.render(100).map(stripTerminalSequences);
     expect(rendered[0]).toStartWith('── Working ');
-    expect(rendered[0]).toEndWith(' Pursuing goal (2m) ─');
+    expect(rendered[0]).toEndWith(' Pursuing goal (2m, 12.5K tokens) ─');
     expect(rendered.join('\n')).toContain('keep this draft');
     let interrupted = false;
     editor.onEscape = () => { interrupted = true; };

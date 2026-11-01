@@ -22,17 +22,16 @@ function elapsed(ms: number): string {
   return `${hours}h` + (minutes % 60 ? ` ${minutes % 60}m` : '');
 }
 
-/** Match Codex's composer indicator wording and compact usage display. */
+/** Codex-style composer labels with compact token consumption in every state. */
 export function formatGoalIndicator(goal: Goal): string {
+  const tokens = `${compactTokens(goal.tokensUsed)} tokens`;
+  const usage = goal.tokenBudget === undefined ? tokens : `${compactTokens(goal.tokensUsed)} / ${compactTokens(goal.tokenBudget)} tokens`;
   switch (goal.status) {
-    case 'active': return `Pursuing goal (${goal.tokenBudget === undefined ? elapsed(goal.timeUsedMs) :
-      `${compactTokens(goal.tokensUsed)} / ${compactTokens(goal.tokenBudget)}`})`;
-    case 'paused': return 'Goal paused (/goal resume)';
-    case 'blocked': return 'Goal stalled (/goal resume)';
-    case 'budget_limited': return goal.tokenBudget === undefined ? 'Goal abandoned' :
-      `Goal unmet (${compactTokens(goal.tokensUsed)} / ${compactTokens(goal.tokenBudget)} tokens)`;
-    case 'complete': return `Goal achieved (${goal.tokenBudget === undefined ? elapsed(goal.timeUsedMs) :
-      `${compactTokens(goal.tokensUsed)} tokens`})`;
+    case 'active': return `Pursuing goal (${goal.tokenBudget === undefined ? `${elapsed(goal.timeUsedMs)}, ${tokens}` : usage})`;
+    case 'paused': return `Goal paused (${usage}, /goal resume)`;
+    case 'blocked': return `Goal stalled (${usage}, /goal resume)`;
+    case 'budget_limited': return goal.tokenBudget === undefined ? `Goal abandoned (${tokens})` : `Goal unmet (${usage})`;
+    case 'complete': return `Goal achieved (${goal.tokenBudget === undefined ? `${elapsed(goal.timeUsedMs)}, ${tokens}` : tokens})`;
   }
 }
 

@@ -4,9 +4,9 @@ Goals attach an objective to the current Pi session. An active goal can continue
 
 ## Editor indicator
 
-The top right of the editor border shows `Pursuing goal (2m)` for an unbudgeted goal or `Pursuing goal (12.5K / 50K)` for a budgeted goal. Elapsed time updates while the goal runs. The indicator shares the border with Pi's working status on the left.
+The top right of the editor border shows `Pursuing goal (2m, 12.5K tokens)` for an unbudgeted goal or `Pursuing goal (12.5K / 50K tokens)` for a budgeted goal. Elapsed time updates while the goal runs. The indicator shares the border with Pi's working status on the left.
 
-Stopped goals show `Goal paused (/goal resume)`, `Goal stalled (/goal resume)`, `Goal unmet (63.9K / 50K tokens)`, or `Goal achieved (2m)`. Completed budgeted goals show consumed tokens. These labels match Codex's composer indicator.
+Stopped goals retain consumed tokens, for example `Goal paused (12.5K tokens, /goal resume)`, `Goal stalled (12.5K tokens, /goal resume)`, `Goal unmet (63.9K / 50K tokens)`, or `Goal achieved (2m, 12.5K tokens)`. Paused and stalled goals with budgets show consumed tokens against the budget. The labels follow Codex's composer indicator, with token consumption added in every state.
 
 The extension wraps an existing custom editor factory and preserves its input handlers. When the border has insufficient room, the indicator uses a separate right-aligned row above the editor. Clearing the goal removes the indicator. The footer has no duplicate goal status.
 

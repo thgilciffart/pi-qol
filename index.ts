@@ -4,6 +4,7 @@ import betterExport from './src/export/index.ts';
 import metrics from './src/metrics.ts';
 import goal from './src/goal.ts';
 import threads from './src/threads.ts';
+import autoName from './src/auto-name.ts';
 
 export default function qol(pi: ExtensionAPI): void {
   ephemeral(pi);
@@ -11,4 +12,5 @@ export default function qol(pi: ExtensionAPI): void {
   metrics(pi);
   goal(pi);
   threads(pi);
+  autoName(pi);
 }

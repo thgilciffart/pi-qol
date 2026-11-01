@@ -1,7 +1,7 @@
 {
   "name": "@thgilciffart/pi-qol",
   "version": "0.1.0",
-  "description": "Persistent goals, response metrics, session deletion, ephemeral chats, and HTML exports for Pi",
+  "description": "Automatic thread names, persistent goals, response metrics, and HTML exports for Pi",
   "type": "module",
   "license": "MIT",
   "files": [
@@ -18,6 +18,7 @@
     "goals",
     "metrics",
     "sessions",
+    "auto-name",
     "ephemeral",
     "export"
   ],

@@ -147,6 +147,6 @@ test('Pi loads the extension and registers the command', async () => {
   const result = await loadExtensions([new URL('../index.ts', import.meta.url).pathname], process.cwd());
   assert.deepEqual(result.errors, []);
   assert.equal(result.extensions.length, 1);
-  for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal']) assert.ok(result.extensions[0].commands.has(command));
+  for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name']) assert.ok(result.extensions[0].commands.has(command));
   for (const tool of ['get_goal', 'create_goal', 'update_goal']) assert.ok(result.extensions[0].tools.has(tool));
 });

@@ -1,6 +1,6 @@
 # pi-qol
 
-A quality of life extension for [Pi](https://pi.dev). It adds persistent goals, response statistics, thread deletion, ephemeral chats, and HTML exports from `pi-better-export`.
+A quality of life extension for [Pi](https://pi.dev). It adds automatic thread names, persistent goals, response statistics, thread deletion, ephemeral chats, and HTML exports from `pi-better-export`.
 
 ## Install
 
@@ -40,6 +40,23 @@ Development checks also require Bun.
 4. Run `/reload` in an open Pi session.
 
 To try the extension without installing it, run `pi -e ./index.ts` from this directory.
+
+## Name new threads automatically
+
+Send the first message in a new chat. Pi generates a short thread name in the background using the current chat model, reasoning off, and a built-in naming prompt. Existing threads and manual names stay unchanged.
+
+Run `/auto-name` to configure the model, effort, and prompt. You can also use direct commands:
+
+```text
+/auto-name model provider/model-id
+/auto-name effort low
+/auto-name prompt
+/auto-name off
+```
+
+`/auto-name prompt` opens the prompt editor. `/auto-name prompt default` restores the built-in prompt. `/auto-name now` generates a name for the current thread from its first message. Settings apply across chats.
+
+See the [automatic naming reference](docs/auto-name.md) for all options and defaults.
 
 ## Read response statistics
 
@@ -127,7 +144,7 @@ npm test
 npm pack --dry-run
 ```
 
-The tests cover goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
+The tests cover automatic naming, goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
 
 See [Publish to npm](docs/publishing.md) for release commands and Pi package discovery.
 

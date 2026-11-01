@@ -56,7 +56,7 @@ Use `/goal` to keep Pi working toward a verifiable outcome across turns:
 /goal --tokens 50000 Reduce benchmark latency below 120 ms and verify correctness
 ```
 
-Pi starts work immediately and continues after completed turns while the goal is active. The footer shows its status and token usage. The agent marks the goal complete after verifying the outcome.
+Pi starts work immediately and continues after completed turns while the goal is active. The top right of the editor shows **Pursuing goal** with elapsed time or a compact token budget. The agent marks the goal complete after verifying the outcome.
 
 Run `/goal` to see the objective and usage. Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Escape pauses an interrupted goal. Use `/goal edit <objective>` to revise it, or `/goal edit` to open an editor.
 

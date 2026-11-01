@@ -67,7 +67,7 @@ describe('/goal', () => {
     expect(h.sent[0].options).toEqual({ triggerTurn: true });
     await h.run();
     expect(h.notifications.at(-1)?.text).toContain('Make the checkout tests pass');
-    expect(h.statuses.at(-1)?.text).toContain('goal active');
+    expect(h.statuses.at(-1)?.text).toBeUndefined();
   });
 
   test('invalid objectives and budgets preserve the previous goal', async () => {

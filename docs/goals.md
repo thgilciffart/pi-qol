@@ -2,6 +2,14 @@
 
 Goals attach an objective to the current Pi session. An active goal can continue across turns until the agent verifies completion, the user pauses it, a budget is exhausted, or a continuation guard stops it.
 
+## Editor indicator
+
+The top right of the editor border shows `Pursuing goal (2m)` for an unbudgeted goal or `Pursuing goal (12.5K / 50K)` for a budgeted goal. Elapsed time updates while the goal runs. The indicator shares the border with Pi's working status on the left.
+
+Stopped goals show `Goal paused (/goal resume)`, `Goal stalled (/goal resume)`, `Goal unmet (63.9K / 50K tokens)`, or `Goal achieved (2m)`. Completed budgeted goals show consumed tokens. These labels match Codex's composer indicator.
+
+The extension wraps an existing custom editor factory and preserves its input handlers. When the border has insufficient room, the indicator uses a separate right-aligned row above the editor. Clearing the goal removes the indicator. The footer has no duplicate goal status.
+
 ## Commands
 
 | Command | Behavior |
@@ -41,7 +49,7 @@ The extension requests continuation at Pi's `agent_before_settle` boundary. It a
 
 Queued messages and continuations from other extensions take priority. A new user message steers the goal. The latest goal state enters model context on every request, including after compaction or an objective edit. Goal text is encoded as user-provided data.
 
-An automatic turn with no tool calls suppresses the next goal continuation. The goal remains active; `/goal resume` explicitly retries it. A provider or execution error that reaches final settlement blocks the goal. Escape pauses it. The extension uses no timer or background worker.
+An automatic turn with no tool calls suppresses the next goal continuation. The goal remains active; `/goal resume` explicitly retries it. A provider or execution error that reaches final settlement blocks the goal. Escape pauses it. Continuation uses no timer or background worker. A UI timer redraws elapsed time while work runs.
 
 `/goal clear` prevents further automatic turns but lets a running operation finish. `/goal pause` interrupts the running operation. Clearing or pausing does not undo tool actions.
 
@@ -66,5 +74,7 @@ The relevant upstream files are:
 - [Idle continuation dispatcher](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/ext/goal/src/runtime.rs).
 - [Token accounting](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/ext/goal/src/accounting.rs).
 - [Terminal goal summary](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/tui/src/chatwidget/goal_menu.rs).
+- [Composer indicator labels and right-side placement](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/tui/src/bottom_pane/footer.rs).
+- [Indicator usage and elapsed time](https://github.com/openai/codex/blob/67f0994b532b8740f14b5b738af7b7b2a915b1d6/codex-rs/tui/src/chatwidget/goal_status.rs).
 
 Pi stores goals in session entries instead of Codex's thread database. This port supports in-memory chats, adds `--tokens` and `budget` command syntax, and requires explicit resume after history restoration. It does not implement Codex-specific plan mode admission, account usage-limit detection, descendant-agent accounting, or goal attachments. Errors use the `blocked` status because Pi does not expose Codex's account-limit classification.

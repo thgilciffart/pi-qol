@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
+import { createGoalUI } from './goal-ui.ts';
 
 export const GOAL_ENTRY = 'pi-qol-goal';
 const CONTINUATION = 'pi-qol-goal-continuation';
@@ -61,12 +62,16 @@ export default function goals(pi: ExtensionAPI): void {
   let budgetReported = false;
   let pursuing = false;
   let hasGoalHistory = false;
+  const presentation = createGoalUI(() => ({
+    goal: goal ? { ...goal, timeUsedMs: goal.timeUsedMs +
+      (goal.status === 'active' && clock !== undefined ? performance.now() - clock : 0) } : undefined,
+    running: goal?.status === 'active' && clock !== undefined,
+  }));
 
   function refresh(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
-    const text = goal ? `goal ${goal.status} · ${goal.tokensUsed}` +
-      (goal.tokenBudget === undefined ? ' tokens' : `/${goal.tokenBudget} tokens`) : undefined;
-    ctx.ui.setStatus(GOAL_ENTRY, text === undefined ? undefined : ctx.ui.theme.fg(goal?.status === 'active' ? 'accent' : 'dim', text));
+    ctx.ui.setStatus(GOAL_ENTRY, undefined);
+    presentation.update(ctx);
   }
 
   function accountTime(): void {
@@ -249,6 +254,7 @@ export default function goals(pi: ExtensionAPI): void {
   pi.on('session_tree', (_event, ctx) => restore(ctx));
   pi.on('session_shutdown', (_event, ctx) => {
     if (goal?.status === 'active') setStatus('paused', ctx);
+    presentation.dispose(ctx);
     if (ctx.hasUI) ctx.ui.setStatus(GOAL_ENTRY, undefined);
   });
   pi.on('before_agent_start', (event) => {
@@ -323,5 +329,6 @@ export default function goals(pi: ExtensionAPI): void {
     if (event.aborted && goal?.status === 'active') setStatus('paused', ctx);
     accountTime();
     clock = requestGoalId = undefined;
+    refresh(ctx);
   });
 }

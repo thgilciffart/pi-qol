@@ -12,11 +12,19 @@ function harness(manager: SessionManager) {
   let cancelled = false;
   let hasUI = true;
   let newSessions = 0;
-  const choices: (string | undefined)[] = [];
-  const ctx: any = { cwd: manager.getCwd(), sessionManager: manager, waitForIdle: async () => {},
+  const keys: string[] = [];
+  let picker: any;
+  const ctx: any = { mode: 'tui', cwd: manager.getCwd(), sessionManager: manager, waitForIdle: async () => {},
     get hasUI() { return hasUI; },
     ui: { notify: (text: string) => notifications.push(text), confirm: async () => confirmed,
-      select: async (_: string, labels: string[]) => { const choice = choices.shift(); return choice === 'first' ? labels[4] : choice; } },
+      custom: async (factory: any) => {
+        picker = factory({ requestRender() {}, terminal: { rows: 30 } }, { fg: (_: string, text: string) => text, bg: (_: string, text: string) => text, bold: (text: string) => text }, {}, () => {});
+        for (const key of keys) {
+          picker.handleInput(key);
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+        picker.dispose();
+      } },
     newSession: async (options: any) => {
       newSessions++;
       if (cancelled) return { cancelled: true };
@@ -27,7 +35,7 @@ function harness(manager: SessionManager) {
     },
   };
   threads({ registerCommand: (name: string, spec: any) => commands.set(name, spec) } as any);
-  return { choices, notifications, run: (name: string, args = '') => commands.get(name).handler(args, ctx),
+  return { keys, notifications, run: (name: string, args = '') => commands.get(name).handler(args, ctx),
     decline: () => { confirmed = false; }, cancelSwitch: () => { cancelled = true; },
     noUI: () => { hasUI = false; }, get newSessions() { return newSessions; } };
 }
@@ -55,9 +63,9 @@ test('bulk deletion toggles selection, preserves the current thread, and cancels
   try {
     const other = SessionManager.create(dir, dir);
     other.appendMessage({ role: 'user', content: 'other', timestamp: Date.now() });
-    const cancelled = harness(manager); cancelled.choices.push('Select all matches', undefined);
+    const cancelled = harness(manager); cancelled.keys.push('\x01', '\x1b');
     await cancelled.run('delete-threads'); expect(await readFile(other.getSessionFile()!, 'utf8')).toContain('other');
-    const h = harness(manager); h.choices.push('first', 'Delete selected (1)');
+    const h = harness(manager); h.keys.push(' ', '\x04', '\r');
     await h.run('delete-threads', 'other');
     await expect(readFile(other.getSessionFile()!)).rejects.toThrow();
     expect(await readFile(file, 'utf8')).toContain('current');

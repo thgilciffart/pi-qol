@@ -1,5 +1,6 @@
 import { unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { ThreadPicker } from './thread-picker.ts';
 import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type SessionInfo } from '@earendil-works/pi-coding-agent';
 
 export function matchingSessions(sessions: SessionInfo[], current: string | undefined, query: string): SessionInfo[] {
@@ -8,14 +9,14 @@ export function matchingSessions(sessions: SessionInfo[], current: string | unde
     `${session.name ?? ''}\n${session.firstMessage}\n${session.cwd}\n${session.id}`.toLocaleLowerCase().includes(search));
 }
 
-export async function deleteFiles(paths: string[]): Promise<{ deleted: number; failures: string[] }> {
-  let deleted = 0;
+export async function deleteFiles(paths: string[]): Promise<{ deleted: number; deletedPaths: string[]; failures: string[] }> {
+  const deletedPaths: string[] = [];
   const failures: string[] = [];
   for (const path of new Set(paths)) {
-    try { await unlink(path); deleted++; }
+    try { await unlink(path); deletedPaths.push(path); }
     catch (error) { failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`); }
   }
-  return { deleted, failures };
+  return { deleted: deletedPaths.length, deletedPaths, failures };
 }
 
 function interactive(ctx: ExtensionCommandContext): boolean {
@@ -31,7 +32,7 @@ function report(ctx: ExtensionCommandContext, result: Awaited<ReturnType<typeof 
 
 export default function threads(pi: ExtensionAPI): void {
   pi.registerCommand('delete', {
-    description: 'Delete the current thread after confirmation and start a new chat',
+    description: 'Delete current thread and start a new chat',
     handler: async (args, ctx) => {
       if (!interactive(ctx)) return;
       if (args.trim()) { ctx.ui.notify('Usage: /delete', 'error'); return; }
@@ -50,37 +51,36 @@ export default function threads(pi: ExtensionAPI): void {
     },
   });
   pi.registerCommand('delete-threads', {
-    description: 'Select saved threads to delete: /delete-threads [--all-projects] [search text]',
+    description: 'Delete multiple threads',
     handler: async (args, ctx) => {
       if (!interactive(ctx)) return;
+      if (ctx.mode !== 'tui') {
+        ctx.ui.notify('The thread picker requires the terminal UI.', 'error');
+        return;
+      }
       await ctx.waitForIdle();
-      const all = /^--all-projects(?:\s|$)/.test(args.trim());
-      const query = (all ? args.trim().replace(/^--all-projects\s*/, '') : args).trim();
       try {
-        const sessions = matchingSessions(all ? await SessionManager.listAll() :
-          await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir() || undefined), ctx.sessionManager.getSessionFile(), query);
-        if (!sessions.length) { ctx.ui.notify('No matching saved threads. The current thread is excluded.', 'info'); return; }
-        const selected = new Set<string>();
-        while (true) {
-          const actions = [`Delete selected (${selected.size})`, 'Select all matches', 'Clear selection', 'Cancel'];
-          const labels = sessions.map((session, index) => {
-            const title = (session.name || session.firstMessage || session.id).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').slice(0, 100);
-            return `${selected.has(session.path) ? '[x]' : '[ ]'} ${index + 1}. ${title} · ${session.modified.toISOString().slice(0, 10)} · ${session.cwd}`;
-          });
-          const choice = await ctx.ui.select(`Saved threads${all ? ' in all projects' : ' in this project'} (${sessions.length})`, [...actions, ...labels]);
-          if (!choice || choice === 'Cancel') return;
-          if (choice === actions[1]) { for (const session of sessions) selected.add(session.path); continue; }
-          if (choice === actions[2]) { selected.clear(); continue; }
-          if (choice === actions[0]) {
-            if (!selected.size) continue;
-            if (!await ctx.ui.confirm(`Delete ${selected.size} saved threads?`,
-              `This permanently removes the selected session files and cannot be undone.\n\n${sessions.filter(s => selected.has(s.path)).map(s => s.path).join('\n')}`)) return;
-            report(ctx, await deleteFiles([...selected]));
-            return;
-          }
-          const session = sessions[labels.indexOf(choice)];
-          if (session) { if (selected.has(session.path)) selected.delete(session.path); else selected.add(session.path); }
-        }
+        const current = ctx.sessionManager.getSessionFile();
+        const project = matchingSessions(await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir() || undefined), current, '');
+        await ctx.ui.custom<void>((tui, theme, _keybindings, done) => new ThreadPicker({
+          project,
+          loadAll: async () => {
+            const sessions = await SessionManager.listAll();
+            // Include the active project's custom session directory in the All scope.
+            const combined = new Map([...sessions, ...project].map(session => [resolve(session.path), session]));
+            return matchingSessions([...combined.values()], current, '').sort((a, b) => b.modified.getTime() - a.modified.getTime());
+          },
+          query: args.trim(),
+          theme,
+          rows: () => tui.terminal.rows,
+          requestRender: () => tui.requestRender(),
+          done: () => done(),
+          deleteThreads: async (sessions) => {
+            const result = await deleteFiles(sessions.map(session => session.path));
+            report(ctx, result);
+            return result.deletedPaths;
+          },
+        }));
       } catch (error) {
         ctx.ui.notify(`Thread deletion failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
       }

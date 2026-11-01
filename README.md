@@ -7,7 +7,7 @@ A quality of life extension for [Pi](https://pi.dev). It adds response statistic
 Requires Node.js 22.19 or later and Pi 1.3.x.
 
 ```sh
-pi install npm:@thgilciffart/pi-qol
+pi install git:github.com/thgilciffart/pi-qol
 ```
 
 Run `/reload` in an open Pi session. Remove standalone installations of `pi-ephemeral` and `pi-better-export` to avoid command conflicts.
@@ -43,7 +43,7 @@ To try the extension without installing it, run `pi -e ./index.ts` from this dir
 
 ## Read response statistics
 
-Send a prompt. The footer shows TTFT when the first streamed content arrives. After the response completes, a row shows token counts, tokens per second, and TTFT. For responses with tool calls, the row follows the tool output.
+Send a prompt. Each final assistant reply has a row with its output token count, tokens per second, and TTFT. Tool-call messages have no statistics row. Statistics appear only in the transcript.
 
 See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
 
@@ -55,12 +55,15 @@ To delete the current thread, run `/delete` and accept the confirmation. Pi star
 
 To delete several threads:
 
-1. Run `/delete-threads` to list saved threads in the current project.
-2. Select a thread to toggle its checkbox. Use **Select all matches** to select the entire list.
-3. Select **Delete selected**.
-4. Review the file paths and accept the confirmation.
+1. Run `/delete-threads` to open the thread picker.
+2. Type to search. Press Tab to switch between the current project and all projects.
+3. Press Space or Enter to select a thread and move to the next row. Press Ctrl+A to select all matching threads.
+4. Press Ctrl+D to review the deletion confirmation.
+5. Press Enter to confirm, or N to return to the list.
 
-Use `/delete-threads search text` to filter by name, first prompt, project path, or session ID. Use `/delete-threads --all-projects search text` to search across Pi's default session storage. The current thread is excluded from bulk deletion.
+Press Escape to exit without deleting any unconfirmed selection. If no threads are selected, Ctrl+D asks to delete the highlighted thread. The current thread is excluded from the picker.
+
+The picker stays open after deletion. Use `/delete-threads search text` to start with a search.
 
 ## Start an ephemeral chat
 

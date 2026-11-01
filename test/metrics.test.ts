@@ -7,25 +7,28 @@ function harness() {
   const manager = SessionManager.inMemory();
   const rows: any[] = [];
   const statuses: any[] = [];
+  let renderer: Function;
   const ctx = { hasUI: true, sessionManager: manager, ui: {
-    theme: { fg: (_: string, value: string) => value },
     setStatus: (_: string, value: string) => statuses.push(value),
   } };
-  metrics({ on: (name: string, fn: Function) => handlers.set(name, fn), registerEntryRenderer: () => {},
+  metrics({ on: (name: string, fn: Function) => handlers.set(name, fn),
+    registerEntryRenderer: (_: string, fn: Function) => { renderer = fn; },
     appendEntry: (type: string, data: unknown) => { manager.appendCustomEntry(type, data); rows.push(data); },
   } as any);
-  return { manager, rows, statuses, fire: (name: string, event = {}) => handlers.get(name)!(event, ctx) };
+  return { manager, rows, statuses, fire: (name: string, event = {}) => handlers.get(name)!(event, ctx),
+    render: (data: any) => renderer({ data }, {}, { fg: (_: string, value: string) => value })?.render(120).map((line: string) => line.trimEnd()) };
 }
-const message = { role: 'assistant', usage: { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 }, durationMs: 2000 };
+const message = { role: 'assistant', content: [{ type: 'text', text: 'Hello' }],
+  usage: { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 }, durationMs: 2000 };
 
-test('rate excludes first-token latency and missing timing remains unknown', () => {
-  expect(calculateMetrics(10, 20, 2500, 500).tps).toBe(10);
-  expect(calculateMetrics(10, 20, 0, 0).tps).toBeUndefined();
-  expect(calculateMetrics(10, 20, 2500).tps).toBeUndefined();
-  expect(formatMetrics(calculateMetrics(10, 20, 2500, 500))).toBe('30 tokens (10 in / 20 out) · 10.0 tok/s · TTFT 0.50s');
+test('rate excludes first-token latency and displays only message output tokens', () => {
+  expect(calculateMetrics(20, 2500, 500).tps).toBe(10);
+  expect(calculateMetrics(20, 0, 0).tps).toBeUndefined();
+  expect(calculateMetrics(20, 2500).tps).toBeUndefined();
+  expect(formatMetrics(calculateMetrics(20, 2500, 500))).toBe('20 tokens · 10.0 tok/s · TTFT 0.50s');
 });
 
-test('records each completed turn once and excludes stats from model context', () => {
+test('records a final reply once, excludes input tokens and model context, and never sets a footer', () => {
   const h = harness();
   h.fire('session_start');
   h.fire('before_provider_request');
@@ -36,15 +39,54 @@ test('records each completed turn once and excludes stats from model context', (
   h.fire('turn_end', { messageEntryId: 'assistant-id' });
   h.fire('agent_end');
   expect(h.rows).toHaveLength(1);
-  expect(h.rows[0]).toMatchObject({ input: 80, output: 20, messageEntryId: 'assistant-id' });
+  expect(h.rows[0]).toMatchObject({ output: 20, messageEntryId: 'assistant-id' });
+  expect(h.rows[0].input).toBeUndefined();
   expect(h.rows[0].ttftMs).toBeNumber();
   expect(h.manager.buildSessionContext().messages).toEqual([]);
   expect(h.manager.getEntries()[0]).toMatchObject({ type: 'custom', customType: METRICS_ENTRY });
   h.fire('session_start');
-  expect(h.statuses.at(-1)).toContain('100 tokens');
+  expect(h.statuses.every(value => value === undefined)).toBe(true);
 });
 
-test('empty deltas do not establish TTFT and aborted responses still get a row', () => {
+test('tool-call messages and empty replies never produce statistics rows', () => {
+  for (const toolMessage of [
+    { ...message, stopReason: 'toolUse' },
+    { ...message, content: [...message.content, { type: 'toolCall', id: 'tool-id', name: 'bash', arguments: {} }] },
+    { ...message, content: [] },
+  ]) {
+    const h = harness();
+    h.fire('message_start', { message: toolMessage });
+    h.fire('message_end', { message: toolMessage });
+    h.fire('turn_end', { messageEntryId: 'tool-assistant' });
+    h.fire('agent_end');
+    expect(h.rows).toEqual([]);
+  }
+});
+
+test('tool turns followed by a final reply produce just one statistics row', () => {
+  const h = harness();
+  const toolMessage = { ...message, stopReason: 'toolUse' };
+  h.fire('message_start', { message: toolMessage });
+  h.fire('message_end', { message: toolMessage });
+  h.fire('turn_end', { messageEntryId: 'tool-assistant' });
+  h.fire('message_start', { message });
+  h.fire('message_end', { message });
+  h.fire('turn_end', { messageEntryId: 'reply' });
+  h.fire('agent_end');
+  expect(h.rows).toHaveLength(1);
+  expect(h.rows[0].messageEntryId).toBe('reply');
+});
+
+test('resumed legacy tool statistics are hidden and final statistics use output counts', () => {
+  const h = harness();
+  h.fire('session_start');
+  const toolId = h.manager.appendMessage({ ...message, stopReason: 'toolUse' } as any);
+  const replyId = h.manager.appendMessage(message as any);
+  expect(h.render({ input: 7500, output: 56, messageEntryId: toolId })).toBeUndefined();
+  expect(h.render({ input: 7724, output: 164, messageEntryId: replyId })).toEqual(['164 tokens · n/a tok/s · TTFT n/a']);
+});
+
+test('empty deltas do not establish TTFT and aborted text replies still get a row', () => {
   const h = harness();
   h.fire('message_start', { message });
   h.fire('message_update', { message, assistantMessageEvent: { type: 'thinking_delta', delta: '' } });

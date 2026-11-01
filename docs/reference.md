@@ -2,13 +2,11 @@
 
 ## Response statistics
 
-The footer shows the current request's TTFT during streaming and the last response's statistics after completion. Each completed assistant turn adds a statistics row to the transcript. A turn with tool calls places its row after the tool results.
+Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics.
 
 | Value | Definition |
 | --- | --- |
-| Input tokens | Provider-reported input, cache-read, and cache-write tokens added together. |
-| Output tokens | Provider-reported output tokens, including reasoning tokens when the provider counts them. |
-| Total tokens | Input tokens plus output tokens for that response. |
+| Tokens | Provider-reported output tokens for that reply, including reasoning tokens when the provider counts them. Input context and cache tokens are excluded. |
 | TTFT | Time from Pi's `before_provider_request` event to the first nonempty text, thinking, or tool-call delta. |
 | Tokens per second | Output tokens divided by the elapsed seconds after the first delta and before `message_end`. |
 
@@ -16,21 +14,37 @@ The clock is monotonic. TTFT includes request and network latency. Stream chunks
 
 Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Token counts use provider usage reports rather than local tokenization.
 
-Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
+Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with output counts only. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
 
 ## Commands
 
 | Command | Behavior |
 | --- | --- |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
-| `/delete-threads [search text]` | Lists matching saved threads in the current session directory. Supports selection toggles, select all, clear selection, and cancellation. |
-| `/delete-threads --all-projects [search text]` | Lists matching saved threads across Pi's default session storage. |
+| `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |
 | `/ephemeral [prompt]` | Starts a new in-memory chat after confirmation. Sends the optional prompt into the new chat. An already ephemeral chat remains active. |
 | `/better-export [flags] [file.html]` | Saves an HTML export of a file-backed session. |
 
-Deletion requires an interactive UI and waits for the agent to become idle. Bulk deletion excludes the current session file. A failed file removal does not stop the remaining removals. The command reports failed paths separately.
+Deletion requires an interactive UI and waits for the agent to become idle. The picker requires the terminal UI. Bulk deletion excludes the current session file. A failed file removal does not stop the remaining removals. The command reports failed paths separately.
 
-Deletion removes only the selected JSONL session files. Forked sessions, exports, and project files remain on disk. The extension cannot detect whether another Pi process has a selected thread open. Global searches do not scan custom session directories outside Pi's default storage.
+Deletion removes only the selected JSONL session files. Forked sessions, exports, and project files remain on disk. The extension cannot detect whether another Pi process has a selected thread open. The All scope includes Pi's default session storage and the active project's session directory. It does not scan other custom session directories.
+
+## Thread picker keys
+
+The list contains thread rows and a search box. It has no action rows. Selection persists when the search or scope changes.
+
+| Key | Behavior |
+| --- | --- |
+| Tab | Switches between the current project and all projects. |
+| Up or Down | Moves the highlighted row. |
+| Page Up or Page Down | Moves by one page. |
+| Home or End | Moves to the first or last matching thread. |
+| Space or Enter | Toggles the highlighted thread and advances to the next row. The last row stays highlighted. |
+| Ctrl+A | Selects all matching threads in the current scope. |
+| Ctrl+D | Asks to delete the selected threads. With no selection, asks to delete the highlighted thread. |
+| Escape | Exits the picker without deleting unconfirmed selections. |
+
+In the confirmation view, Enter confirms deletion, N returns to the list, and Escape exits. Confirmation includes selections hidden by the current search or scope. The picker remains open after deletion and retains threads whose files could not be removed.
 
 ## Export flags
 

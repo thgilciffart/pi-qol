@@ -217,8 +217,9 @@ describe("/ephemeral", () => {
 	});
 });
 
-test("Ctrl+E dispatches the real command without sending a model message", async () => {
-	const { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+test("Alt+P dispatches the real command without sending a model message", async () => {
+	const { createAgentSession, DefaultResourceLoader, getPackageDir, ModelRuntime, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const { KeybindingsManager } = await import(join(getPackageDir(), "dist/core/keybindings.js"));
 	const dir = await mkdtemp(join(tmpdir(), "pi-qol-ephemeral-shortcut-"));
 	let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
 	try {
@@ -243,8 +244,11 @@ test("Ctrl+E dispatches the real command without sending a model message", async
 		});
 		let requests = 0;
 		session.agent.streamFunction = async () => { requests++; throw new Error("Shortcut must dispatch /ephemeral, not prompt a model"); };
-		const extension = created.extensionsResult.extensions.find(extension => extension.shortcuts.has("ctrl+e"))!;
-		await extension.shortcuts.get("ctrl+e")!.handler(session.extensionRunner.createContext());
+		const extension = created.extensionsResult.extensions.find(extension => extension.shortcuts.has("alt+p"))!;
+		const keybindings = new KeybindingsManager({ "app.model.cycleBackward": "shift+ctrl+p" });
+		expect(session.extensionRunner.getShortcuts(keybindings.getEffectiveConfig()).has("alt+p")).toBe(true);
+		expect(extension.shortcuts.has("ctrl+e")).toBe(false);
+		await extension.shortcuts.get("alt+p")!.handler(session.extensionRunner.createContext());
 		await new Promise<void>(resolve => setImmediate(resolve));
 		expect(confirmations).toEqual(["Start a new ephemeral chat?"]);
 		expect(notices).toContain("No new chat was created.");

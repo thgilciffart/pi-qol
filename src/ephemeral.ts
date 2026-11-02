@@ -68,7 +68,7 @@ function refreshStatus(ctx: ExtensionContext): void {
 }
 
 export default function ephemeralPlugin(pi: ExtensionAPI): void {
-	pi.registerShortcut(Key.ctrl("e"), {
+	pi.registerShortcut(Key.alt("p"), {
 		description: "Start an ephemeral chat",
 		handler: () => {
 			// Shortcuts lack newSession(). Dispatch the command with its full context.

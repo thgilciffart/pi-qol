@@ -113,11 +113,21 @@ Each thread shows its last-modified date before its title, using the system loca
 
 The picker stays open after deletion. Use `/delete-threads search text` to start with a search.
 
+## Cycle thinking effort
+
+Press Alt+, for the previous thinking level or Alt+. for the next. Both wrap around and skip levels the current model does not support. Changes apply to the current session.
+
 ## Start an ephemeral chat
 
-Press Ctrl+E or run `/ephemeral`, then accept the confirmation. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+Press Alt+P or run `/ephemeral`, then accept the confirmation. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
 
-Ctrl+E replaces Pi's default end-of-line shortcut. Use End to move to the end of the line.
+Pi reserves Alt+P for previous-model cycling. To free it for ephemeral chats, set the following in `~/.pi/agent/keybindings.json`, then run `/reload`:
+
+```json
+{
+  "app.model.cycleBackward": "shift+ctrl+p"
+}
+```
 
 To send an initial prompt into the new chat:
 

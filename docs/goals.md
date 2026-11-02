@@ -57,7 +57,9 @@ Queued messages and continuations from other extensions take priority. A new use
 
 The header keeps the latest tool result or user message at the end of context. Full goal reminders from older versions become short continuation requests in model context. The saved transcript remains unchanged. The instructions discourage repeated goal and usage recaps, while allowing brief reorientation after compaction and updates about new findings or blockers.
 
-An automatic turn with no tool calls suppresses the next goal continuation. The goal remains active; `/goal resume` explicitly retries it. A provider or execution error that reaches final settlement blocks the goal. Escape pauses it. Continuation uses event handoffs without polling or a background worker. A UI timer redraws elapsed time while work runs.
+An automatic turn with no tool calls gets a recovery request to take concrete action or verify completion. After three consecutive automatic turns without tool calls, the goal becomes blocked and the indicator shows `Goal stalled`. Tool execution, fresh user input, or an explicit resume resets this count. `/goal resume` retries a stalled goal. Token budgets and interruptions still take precedence over recovery requests.
+
+A provider or execution error that reaches final settlement blocks the goal. Escape pauses it. Continuation uses event handoffs without polling or a background worker. A UI timer redraws elapsed time while work runs.
 
 `/goal clear` prevents further automatic turns but lets a running operation finish. `/goal pause` interrupts the running operation. Clearing or pausing does not undo tool actions.
 

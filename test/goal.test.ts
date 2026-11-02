@@ -272,7 +272,73 @@ describe('/goal', () => {
     await h.begin(true);
     expect((await h.state())?.turns).toBe(2);
     expect(await h.settle()).toBeUndefined();
-    expect(h.notifications.at(-1)?.text).toContain('no tool calls');
+    await h.handoff();
+    expect(h.sent).toHaveLength(3);
+    expect(h.sent.at(-1).content).toContain('previous response ended without tool calls');
+    expect((await h.emit('context', { messages: [{ role: 'custom', ...h.sent.at(-1) }] })).messages.at(-1).content).toBe(h.sent.at(-1).content);
+    expect((await h.state())?.status).toBe('active');
+    expect(h.notifications).toEqual([]);
+  });
+
+  test('three consecutive automatic turns without tools stall the goal and explicit resume retries it', async () => {
+    const h = harness();
+    await h.run('Fix it');
+    for (let turn = 1; turn <= 3; turn++) {
+      await h.begin(true);
+      await h.usage();
+      await h.settle();
+      await h.handoff();
+      expect((await h.state())?.status).toBe(turn === 3 ? 'blocked' : 'active');
+      expect(h.sent).toHaveLength(Math.min(turn + 1, 3));
+    }
+    expect(h.notifications.at(-1)?.text).toContain('3 consecutive turns without tool calls');
+    await h.run('resume');
+    await h.begin(true);
+    await h.settle();
+    await h.handoff();
+    expect((await h.state())?.status).toBe('active');
+    expect(h.sent).toHaveLength(5);
+  });
+
+  test('tool execution and user steering each reset the no-tool streak', async () => {
+    for (const reset of ['tool', 'user'] as const) {
+      const h = harness();
+      await h.run('Fix it');
+      for (let turn = 0; turn < 2; turn++) {
+        await h.begin(true);
+        await h.settle();
+        await h.handoff();
+      }
+      await h.begin(true);
+      if (reset === 'tool') await h.emit('tool_execution_end');
+      else await h.emit('input', { source: 'interactive', text: 'Try another approach' });
+      await h.settle();
+      await h.handoff();
+      await h.begin(true);
+      await h.settle();
+      await h.handoff();
+      expect((await h.state())?.status).toBe('active');
+      expect(h.sent).toHaveLength(5);
+      expect(h.notifications).toEqual([]);
+    }
+  });
+
+  test('budget exhaustion, completion, and interruption take priority over no-tool recovery', async () => {
+    for (const stop of ['budget', 'complete', 'aborted', 'error'] as const) {
+      const h = harness();
+      await h.run('--tokens 100 Fix it');
+      await h.begin(true);
+      await h.settle();
+      await h.handoff();
+      await h.begin(true);
+      if (stop === 'budget') await h.usage(100, 0, 0, 0);
+      if (stop === 'complete') await h.tool('update_goal', { status: 'complete' });
+      await h.settle({ outcome: stop === 'aborted' || stop === 'error' ? stop : 'completed' });
+      await h.handoff();
+      expect((await h.state())?.status).toBe({ budget: 'budget_limited', complete: 'complete', aborted: 'paused', error: 'blocked' }[stop]);
+      expect(h.sent).toHaveLength(stop === 'budget' ? 3 : 2);
+      if (stop === 'budget') expect(h.sent.at(-1).content).toContain('token budget');
+    }
   });
 
   test('Escape pauses and provider failure blocks automatic continuation', async () => {
@@ -407,7 +473,7 @@ test(`real Pi runtime starts via ${entrypoint}, continues, and stops on completi
     await session.bindExtensions({ onError: error => { errors.push(error.error); } });
     let requests = 0;
     const toolStart = entrypoint === 'tool';
-    const finalRequest = 4;
+    const finalRequest = 6;
     const completionRequest = finalRequest - 1;
     let finished!: () => void;
     const completion = new Promise<void>(resolve => { finished = resolve; });
@@ -438,8 +504,9 @@ test(`real Pi runtime starts via ${entrypoint}, continues, and stops on completi
     await completion;
     await session.waitForIdle();
     const state = manager.getBranch().filter(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY).at(-1);
-    const tokensUsed = toolStart ? 30 : 45;
-    expect(state?.type === 'custom' && state.data).toMatchObject({ status: 'complete', turns: 2, tokensUsed });
+    const tokensUsed = toolStart ? 60 : 75;
+    expect(state?.type === 'custom' && state.data).toMatchObject({ status: 'complete', turns: 4, tokensUsed });
+    expect(manager.getBranch().filter(entry => entry.type === 'custom_message' && entry.customType === 'pi-qol-goal-continuation' && entry.content.includes('previous response ended without tool calls'))).toHaveLength(2);
     expect(requests).toBe(finalRequest);
     expect(errors).toEqual([]);
     const restored = harness(SessionManager.open(manager.getSessionFile()!));

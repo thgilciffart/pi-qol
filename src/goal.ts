@@ -6,6 +6,8 @@ import { compactTokens, createGoalUI } from './goal-ui.ts';
 export const GOAL_ENTRY = 'pi-qol-goal';
 const CONTINUATION = 'pi-qol-goal-continuation';
 const CONTINUE_REQUEST = 'Continue from the latest result according to the current goal state. Take the next useful action without repeating the goal or a full status recap.';
+const RECOVERY_REQUEST = 'The previous response ended without tool calls while the goal is still active. Take the next concrete action instead of repeating a status recap or announcing that you are resuming. If the objective is achieved, verify it and call update_goal with status complete. For blockers, follow the goal instructions.';
+const MAX_NO_TOOL_TURNS = 3;
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'budget_limited' | 'complete';
 
 export interface Goal {
@@ -73,6 +75,7 @@ export default function goals(pi: ExtensionAPI): void {
   let clock: number | undefined;
   let requestGoalId: string | undefined;
   let hadTool = false;
+  let noToolTurns = 0;
   let automatic = false;
   let budgetReported = false;
   let pursuing = false;
@@ -159,6 +162,7 @@ export default function goals(pi: ExtensionAPI): void {
     goal = { id: randomUUID(), objective: value, status: 'active', tokenBudget, tokensUsed: 0, timeUsedMs: 0, turns: 0 };
     hasGoalHistory = true;
     pursuing = true;
+    noToolTurns = 0;
     userResumeAllowed = false;
     budgetReported = false;
     clock = ctx.isIdle() ? undefined : performance.now();
@@ -187,6 +191,7 @@ export default function goals(pi: ExtensionAPI): void {
     }
     cancelContinuation();
     goal.turns = currentTurn ? 1 : 0;
+    noToolTurns = 0;
     budgetReported = userResumeAllowed = false;
     pursuing = true;
     accountTime();
@@ -316,6 +321,7 @@ export default function goals(pi: ExtensionAPI): void {
     goal = undefined;
     clock = requestGoalId = undefined;
     hadTool = automatic = budgetReported = pursuing = userResumeAllowed = false;
+    noToolTurns = 0;
     hasGoalHistory = false;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === 'custom' && entry.customType === GOAL_ENTRY) {
@@ -340,11 +346,15 @@ export default function goals(pi: ExtensionAPI): void {
   pi.on('before_agent_start', (event) => {
     cancelContinuation();
     automatic = event.messageType === 'custom' && event.message.customType === CONTINUATION;
+    if (!automatic) noToolTurns = 0;
     userResumeAllowed = event.messageType === 'user';
     pursuing = goal?.status === 'active';
   });
   pi.on('input', (event) => {
-    if (event.source !== 'extension') userResumeAllowed = true;
+    if (event.source !== 'extension') {
+      userResumeAllowed = true;
+      noToolTurns = 0;
+    }
   });
   // Context transforms are transient. Supply one stable header on every request
   // so compaction/edits cannot lose the goal, without appending a fresh reminder
@@ -354,7 +364,7 @@ export default function goals(pi: ExtensionAPI): void {
     const messages = event.messages
       .filter(message => message.role !== 'custom' || message.customType !== GOAL_ENTRY)
       .map(message => message.role === 'custom' && message.customType === CONTINUATION
-        ? { ...message, content: CONTINUE_REQUEST } : message);
+        ? { ...message, content: message.content === RECOVERY_REQUEST ? RECOVERY_REQUEST : CONTINUE_REQUEST } : message);
     return { messages: [{
       role: 'custom' as const, customType: GOAL_ENTRY, display: false, timestamp: 0,
       content: goal ? goalInstructions(goal) : 'This session has no active goal. Do not infer a goal from ordinary tasks.',
@@ -380,7 +390,7 @@ export default function goals(pi: ExtensionAPI): void {
       setStatus('budget_limited', ctx);
     } else persist(ctx);
   });
-  pi.on('tool_execution_end', () => { hadTool = true; });
+  pi.on('tool_execution_end', () => { hadTool = true; noToolTurns = 0; });
   pi.on('session_before_compact', () => {
     compacting = true;
     accountTime();
@@ -427,7 +437,13 @@ export default function goals(pi: ExtensionAPI): void {
     }
     if (goal.status !== 'active') return;
     if (automatic && !hadTool) {
-      ctx.ui.notify('Goal continuation stopped after a turn with no tool calls. Use /goal resume to continue.', 'warning');
+      noToolTurns += 1;
+      if (noToolTurns >= MAX_NO_TOOL_TURNS) {
+        setStatus('blocked', ctx);
+        ctx.ui.notify(`Goal stalled after ${MAX_NO_TOOL_TURNS} consecutive turns without tool calls. Use /goal resume to retry.`, 'warning');
+      } else {
+        queueContinuation(ctx, RECOVERY_REQUEST);
+      }
       return;
     }
     queueContinuation(ctx);

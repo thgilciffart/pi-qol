@@ -119,7 +119,9 @@ Press Alt+, for the previous thinking level or Alt+. for the next. Both wrap aro
 
 ## Start an ephemeral chat
 
-Press Alt+P or run `/ephemeral`, then accept the confirmation. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+Press Alt+P or run `/ephemeral` to open a private chat immediately. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+
+Press Alt+P again before sending a message to return to the previous saved chat. Once the private chat contains messages, the shortcut keeps it open. It never saves private history or discards a conversation you have started.
 
 Pi reserves Alt+P for previous-model cycling. To free it for ephemeral chats, set the following in `~/.pi/agent/keybindings.json`, then run `/reload`:
 

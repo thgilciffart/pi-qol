@@ -1,17 +1,17 @@
 /**
  * Ephemeral chats for pi.
  *
- * `/ephemeral` starts a new chat that is never written to disk. The active
- * chat is never converted, because pi fixes persistence when a session is
- * created; on a saved chat the plugin asks whether to create a new ephemeral
- * chat instead.
+ * `/ephemeral` opens an in-memory chat immediately. Repeating it before any
+ * messages have been sent returns to the saved chat. Private conversation
+ * history is never converted into a saved session.
  */
 
-import type { ExtensionAPI, ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import { SessionManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 
 /** Footer status key for the ephemeral badge. */
 const STATUS_KEY = "ephemeral";
+const RETURN_ENTRY = "pi-qol-ephemeral-return";
 
 /** The fields that separate a file-backed `SessionManager` from `SessionManager.inMemory()`. */
 interface SessionManagerInternals {
@@ -68,8 +68,9 @@ function refreshStatus(ctx: ExtensionContext): void {
 }
 
 export default function ephemeralPlugin(pi: ExtensionAPI): void {
+	let switching = false;
 	pi.registerShortcut(Key.alt("p"), {
-		description: "Start an ephemeral chat",
+		description: "Toggle an empty ephemeral chat",
 		handler: () => {
 			// Shortcuts lack newSession(). Dispatch the command with its full context.
 			pi.sendUserMessage("/ephemeral", { expandPromptTemplates: true });
@@ -77,11 +78,33 @@ export default function ephemeralPlugin(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("ephemeral", {
-		description: "Start a new chat that is never saved to disk",
+		description: "Open a private chat or leave an empty one",
 		handler: async (args, ctx) => {
+			if (switching) return;
+			const initialPrompt = args.trim();
 			if (!isPersisted(ctx)) {
-				ctx.ui.notify("This chat is already ephemeral. Nothing is saved to disk.", "info");
-				refreshStatus(ctx);
+				const entries = ctx.sessionManager.getEntries();
+				if (initialPrompt || entries.some(entry => entry.type === "message") || !ctx.isIdle() || ctx.hasPendingMessages()) {
+					ctx.ui.notify("This chat is already ephemeral. Only an empty, idle chat can leave private mode.", "info");
+					refreshStatus(ctx);
+					return;
+				}
+				const previous = entries.findLast(entry => entry.type === "custom" && entry.customType === RETURN_ENTRY);
+				const data = previous?.type === "custom" ? previous.data as { sessionFile?: unknown } | null : null;
+				const target = typeof data?.sessionFile === "string" && data.sessionFile
+					? data.sessionFile : SessionManager.create(ctx.cwd).getSessionFile()!;
+				switching = true;
+				try {
+					const result = await ctx.switchSession(target, {
+						withSession: async newCtx => {
+							refreshStatus(newCtx);
+							newCtx.ui.notify("Private mode off.", "info");
+						},
+					});
+					if (result.cancelled) ctx.ui.notify("Still in private mode.", "info");
+				} finally {
+					switching = false;
+				}
 				return;
 			}
 
@@ -90,44 +113,42 @@ export default function ephemeralPlugin(pi: ExtensionAPI): void {
 				return;
 			}
 
-			const confirmed = await ctx.ui.confirm(
-				"Start a new ephemeral chat?",
-				"This chat is saved and can't be turned into an ephemeral chat.\n\n" +
-					"Create a new chat that is never written to disk?",
-			);
-			if (!confirmed) {
-				ctx.ui.notify("No new chat was created.", "info");
-				return;
-			}
-
-			const initialPrompt = args.trim();
+			const previousSessionFile = ctx.sessionManager.getSessionFile();
 			let inMemory = false;
 
 			// The current ctx is stale after a successful replacement. Any work that
 			// needs the new session must run in withSession().
-			const result = await ctx.newSession({
-				setup: async (sessionManager) => {
-					inMemory = makeSessionInMemory(sessionManager);
-				},
-				withSession: async (newCtx) => {
-					refreshStatus(newCtx);
-					if (inMemory) {
-						newCtx.ui.notify("Ephemeral chat started. Nothing in this chat is saved to disk.", "info");
-					} else {
-						newCtx.ui.notify(
-							"Could not disable session persistence for the new chat. It will be saved. No initial prompt was sent.",
-							"error",
-						);
-						return;
-					}
-					if (initialPrompt) {
-						await newCtx.sendUserMessage(initialPrompt, { expandPromptTemplates: true });
-					}
-				},
-			});
+			switching = true;
+			try {
+				const result = await ctx.newSession({
+					setup: async (sessionManager) => {
+						inMemory = makeSessionInMemory(sessionManager);
+						if (inMemory && previousSessionFile) {
+							sessionManager.appendCustomEntry(RETURN_ENTRY, { sessionFile: previousSessionFile });
+						}
+					},
+					withSession: async (newCtx) => {
+						refreshStatus(newCtx);
+						if (inMemory) {
+							newCtx.ui.notify("Ephemeral chat started. Nothing in this chat is saved to disk.", "info");
+						} else {
+							newCtx.ui.notify(
+								"Could not disable session persistence for the new chat. It will be saved. No initial prompt was sent.",
+								"error",
+							);
+							return;
+						}
+						if (initialPrompt) {
+							await newCtx.sendUserMessage(initialPrompt, { expandPromptTemplates: true });
+						}
+					},
+				});
 
-			if (result.cancelled) {
-				ctx.ui.notify("No new chat was created.", "info");
+				if (result.cancelled) {
+					ctx.ui.notify("No new chat was created.", "info");
+				}
+			} finally {
+				switching = false;
 			}
 		},
 	});

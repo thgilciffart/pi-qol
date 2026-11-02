@@ -78,6 +78,9 @@ export default function goals(pi: ExtensionAPI): void {
   let pursuing = false;
   let hasGoalHistory = false;
   let userResumeAllowed = false;
+  let compacting = false;
+  let continuation: { goalId: string; sessionId: string; content: string; budgetSummary: boolean } | undefined;
+  let scheduled: ReturnType<typeof setImmediate> | undefined;
   const presentation = createGoalUI(() => ({
     goal: goal ? { ...goal, timeUsedMs: goal.timeUsedMs +
       (goal.status === 'active' && clock !== undefined ? performance.now() - clock : 0) } : undefined,
@@ -88,6 +91,42 @@ export default function goals(pi: ExtensionAPI): void {
     if (!ctx.hasUI) return;
     ctx.ui.setStatus(GOAL_ENTRY, undefined);
     presentation.update(ctx);
+  }
+
+  function cancelContinuation(): void {
+    if (scheduled) clearImmediate(scheduled);
+    scheduled = undefined;
+    continuation = undefined;
+  }
+
+  function scheduleContinuation(ctx: ExtensionContext): void {
+    if (!continuation || scheduled) return;
+    // Yield once so every agent_settled listener can start maintenance, including
+    // compaction. This is an event handoff, not an idle polling loop.
+    scheduled = setImmediate(() => {
+      scheduled = undefined;
+      const next = continuation;
+      if (!next) return;
+      try {
+        if (!goal || goal.id !== next.goalId || ctx.sessionManager.getSessionId() !== next.sessionId ||
+          goal.status !== (next.budgetSummary ? 'budget_limited' : 'active') || ctx.hasPendingMessages()) {
+          continuation = undefined;
+          return;
+        }
+        // session_compact schedules another attempt once compaction succeeds.
+        if (compacting || !ctx.isIdle()) return;
+        continuation = undefined;
+        pi.sendMessage({ customType: CONTINUATION, content: next.content, display: false }, { triggerTurn: true });
+      } catch {
+        // Direct SDK disposal can invalidate contexts without session_shutdown.
+        continuation = undefined;
+      }
+    });
+  }
+
+  function queueContinuation(ctx: ExtensionContext, content = CONTINUE_REQUEST, budgetSummary = false): void {
+    if (!goal) return;
+    continuation = { goalId: goal.id, sessionId: ctx.sessionManager.getSessionId(), content, budgetSummary };
   }
 
   function accountTime(): void {
@@ -107,6 +146,7 @@ export default function goals(pi: ExtensionAPI): void {
     if (!goal) throw new Error('This session has no goal.');
     accountTime();
     goal.status = status;
+    if (status !== 'active') cancelContinuation();
     if (status !== 'active') userResumeAllowed = false;
     if (status !== 'active') clock = undefined;
     persist(ctx);
@@ -115,6 +155,7 @@ export default function goals(pi: ExtensionAPI): void {
   function start(objective: string, tokenBudget: number | undefined, ctx: ExtensionContext): void {
     const value = validateObjective(objective);
     if (tokenBudget !== undefined) validateBudget(tokenBudget);
+    cancelContinuation();
     goal = { id: randomUUID(), objective: value, status: 'active', tokenBudget, tokensUsed: 0, timeUsedMs: 0, turns: 0 };
     hasGoalHistory = true;
     pursuing = true;
@@ -144,6 +185,7 @@ export default function goals(pi: ExtensionAPI): void {
     if (goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
       throw new Error('Goal token budget is exhausted. Use /goal budget N to raise it before resuming.');
     }
+    cancelContinuation();
     goal.turns = currentTurn ? 1 : 0;
     budgetReported = userResumeAllowed = false;
     pursuing = true;
@@ -166,6 +208,7 @@ export default function goals(pi: ExtensionAPI): void {
           return;
         }
         if (text === 'clear') {
+          cancelContinuation();
           goal = undefined;
           userResumeAllowed = false;
           clock = requestGoalId = undefined;
@@ -268,6 +311,8 @@ export default function goals(pi: ExtensionAPI): void {
   });
 
   function restore(ctx: ExtensionContext): void {
+    cancelContinuation();
+    compacting = false;
     goal = undefined;
     clock = requestGoalId = undefined;
     hadTool = automatic = budgetReported = pursuing = userResumeAllowed = false;
@@ -286,11 +331,14 @@ export default function goals(pi: ExtensionAPI): void {
   pi.on('session_start', (_event, ctx) => restore(ctx));
   pi.on('session_tree', (_event, ctx) => restore(ctx));
   pi.on('session_shutdown', (_event, ctx) => {
+    cancelContinuation();
+    compacting = false;
     if (goal?.status === 'active') setStatus('paused', ctx);
     presentation.dispose(ctx);
     if (ctx.hasUI) ctx.ui.setStatus(GOAL_ENTRY, undefined);
   });
   pi.on('before_agent_start', (event) => {
+    cancelContinuation();
     automatic = event.messageType === 'custom' && event.message.customType === CONTINUATION;
     userResumeAllowed = event.messageType === 'user';
     pursuing = goal?.status === 'active';
@@ -333,12 +381,30 @@ export default function goals(pi: ExtensionAPI): void {
     } else persist(ctx);
   });
   pi.on('tool_execution_end', () => { hadTool = true; });
+  pi.on('session_before_compact', () => {
+    compacting = true;
+    accountTime();
+    clock = requestGoalId = undefined;
+  });
+  pi.on('session_compact', (_event, ctx) => {
+    compacting = false;
+    // This event runs before Pi clears its compaction flag. The one-shot handoff
+    // below starts work only after completion and all other listeners return.
+    scheduleContinuation(ctx);
+    refresh(ctx);
+  });
+  pi.on('session_compact_failed', (event, ctx) => {
+    compacting = false;
+    cancelContinuation();
+    if (goal?.status === 'active') setStatus(event.aborted ? 'paused' : 'blocked', ctx);
+  });
   pi.on('tool_call', (event) => {
     if (pursuing && goal?.status === 'budget_limited' && event.toolName !== 'get_goal' && event.toolName !== 'update_goal') {
       return { block: true, reason: 'Goal token budget exhausted. Summarize progress and remaining work without starting new substantive work.' };
     }
   });
   pi.on('agent_before_settle', (event, ctx) => {
+    cancelContinuation();
     accountTime();
     clock = undefined;
     if (!goal) return;
@@ -356,25 +422,22 @@ export default function goals(pi: ExtensionAPI): void {
       if (!pursuing || budgetReported) return;
       budgetReported = true;
       ctx.ui.notify(`Goal reached its token budget (${goal.tokensUsed}/${goal.tokenBudget}).`, 'warning');
-      return { continue: true, entries: [...event.entries, { type: 'custom_message' as const, customType: CONTINUATION, display: false,
-        content: `The goal reached its token budget (${goal.tokensUsed}/${goal.tokenBudget}). Stop substantive work. Summarize progress, remaining work, blockers, and the next useful step. Do not claim completion without evidence.` }] };
+      queueContinuation(ctx, `The goal reached its token budget (${goal.tokensUsed}/${goal.tokenBudget}). Stop substantive work. Summarize progress, remaining work, blockers, and the next useful step. Do not claim completion without evidence.`, true);
+      return;
     }
     if (goal.status !== 'active') return;
     if (automatic && !hadTool) {
       ctx.ui.notify('Goal continuation stopped after a turn with no tool calls. Use /goal resume to continue.', 'warning');
       return;
     }
-    automatic = true;
-    hadTool = false;
-    clock = performance.now();
-    persist(ctx);
-    return { continue: true, entries: [...event.entries, { type: 'custom_message' as const, customType: CONTINUATION,
-      content: CONTINUE_REQUEST, display: false }] };
+    queueContinuation(ctx);
   });
   pi.on('agent_settled', (event, ctx) => {
     if (event.aborted && goal?.status === 'active') setStatus('paused', ctx);
     accountTime();
     clock = requestGoalId = undefined;
     refresh(ctx);
+    if (event.aborted) cancelContinuation();
+    else scheduleContinuation(ctx);
   });
 }

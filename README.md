@@ -87,6 +87,8 @@ Ordinary messages steer the goal without pausing it. The agent pauses only when 
 
 Goals persist with the session and survive compaction. Reopened sessions restore goals paused. Give directions to continue or run `/goal resume`. Ephemeral chats keep their goals in memory.
 
+Goal turns let Pi become idle between continuations so compaction extensions can run their threshold checks. The goal waits for automatic compaction to finish before continuing.
+
 See the [goal reference and Codex sources](docs/goals.md) for budget accounting, continuation guards, and differences from Codex.
 
 ## Delete threads

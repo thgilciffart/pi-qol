@@ -46,11 +46,16 @@ function harness(manager = SessionManager.inMemory()) {
       outcome: 'completed', entries: [], continue: false, context: { pendingMessages: [] }, ...options,
     });
   }
+  async function handoff() {
+    idle = true;
+    await emit('agent_settled', { aborted: false });
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
   async function usage(input = 10, output = 5, cacheRead = 100, cacheWrite = 3) {
     await emit('before_provider_request');
     await emit('message_end', { message: { role: 'assistant', usage: { input, output, cacheRead, cacheWrite } } });
   }
-  return { manager, ctx, commands, tools, notifications, sent, statuses, emit, tool, state, begin, settle, usage,
+  return { manager, ctx, commands, tools, notifications, sent, statuses, emit, tool, state, begin, settle, handoff, usage,
     run: (args = '') => commands.get('goal').handler(args, ctx),
     setIdle: (value: boolean) => { idle = value; },
     setPending: (value: boolean) => { pending = value; },
@@ -112,7 +117,9 @@ describe('/goal', () => {
     expect(await h.state()).toMatchObject({ objective: 'Fix it', status: 'active' });
     expect(h.wasAborted()).toBe(false);
     await h.emit('tool_execution_end');
-    expect((await h.settle()).continue).toBe(true);
+    expect(await h.settle()).toBeUndefined();
+    await h.handoff();
+    expect(h.sent).toHaveLength(2);
   });
 
   test('new user guidance can authorize resuming a paused goal without the word resume', async () => {
@@ -129,8 +136,9 @@ describe('/goal', () => {
     expect(await h.state()).toMatchObject({ status: 'active', objective: 'Fix it', tokenBudget: 100, tokensUsed: 18, turns: 1 });
     await expect(h.tool('update_goal', { status: 'blocked' })).rejects.toThrow('three');
     await h.emit('tool_execution_end');
-    expect((await h.settle()).continue).toBe(true);
-    expect(h.sent).toHaveLength(1);
+    expect(await h.settle()).toBeUndefined();
+    await h.handoff();
+    expect(h.sent).toHaveLength(2);
   });
 
   test('steering input can authorize resuming within an existing run', async () => {
@@ -212,9 +220,10 @@ describe('/goal', () => {
     expect((await h.emit('tool_call', { toolName: 'bash' })).block).toBe(true);
     expect(await h.emit('tool_call', { toolName: 'get_goal' })).toBeUndefined();
     const result = await h.settle();
-    expect(result.continue).toBe(true);
-    expect(result.entries[0].content).toContain('Stop substantive work');
-    await h.emit('agent_start');
+    expect(result).toBeUndefined();
+    await h.handoff();
+    expect(h.sent.at(-1).content).toContain('Stop substantive work');
+    await h.begin(true);
     expect(await h.settle()).toBeUndefined();
     await h.run('pause');
     expect((await h.state())?.status).toBe('budget_limited');
@@ -247,18 +256,20 @@ describe('/goal', () => {
     expect(await h.state()).toMatchObject({ status: 'budget_limited', tokensUsed: 15 });
   });
 
-  test('continues at settlement and preserves other extensions boundary entries', async () => {
+  test('fully settles before continuing and preserves other extensions boundary entries', async () => {
     const h = harness();
     await h.run('Fix it');
     await h.begin();
     await h.emit('tool_execution_end');
     const prior = { type: 'custom', customType: 'another-extension', data: 123 };
-    const result = await h.settle({ entries: [prior] });
-    expect(result.continue).toBe(true);
-    expect(result.entries[0]).toEqual(prior);
-    expect(result.entries[1].customType).toBe('pi-qol-goal-continuation');
+    const entries = [prior];
+    expect(await h.settle({ entries })).toBeUndefined();
+    expect(entries).toEqual([prior]);
+    expect(h.sent).toHaveLength(1);
+    await h.handoff();
+    expect(h.sent.at(-1).customType).toBe('pi-qol-goal-continuation');
     expect((await h.emit('context', { messages: [] })).messages[0].content).toContain('Fix it');
-    await h.emit('agent_start');
+    await h.begin(true);
     expect((await h.state())?.turns).toBe(2);
     expect(await h.settle()).toBeUndefined();
     expect(h.notifications.at(-1)?.text).toContain('no tool calls');
@@ -398,6 +409,11 @@ test(`real Pi runtime starts via ${entrypoint}, continues, and stops on completi
     const toolStart = entrypoint === 'tool';
     const finalRequest = 4;
     const completionRequest = finalRequest - 1;
+    let finished!: () => void;
+    const completion = new Promise<void>(resolve => { finished = resolve; });
+    session.subscribe(event => {
+      if (event.type === 'agent_settled' && requests === finalRequest) finished();
+    });
     session.agent.streamFunction = async (_model, context, options) => {
       await options?.onPayload?.({}, model);
       requests++;
@@ -419,6 +435,7 @@ test(`real Pi runtime starts via ${entrypoint}, continues, and stops on completi
       return stream;
     };
     await session.prompt(toolStart ? 'Create a goal to finish the fixture task and pursue it.' : '/goal Finish the fixture task');
+    await completion;
     await session.waitForIdle();
     const state = manager.getBranch().filter(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY).at(-1);
     const tokensUsed = toolStart ? 30 : 45;

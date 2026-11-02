@@ -8,6 +8,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import { Key } from "@earendil-works/pi-tui";
 
 /** Footer status key for the ephemeral badge. */
 const STATUS_KEY = "ephemeral";
@@ -67,6 +68,14 @@ function refreshStatus(ctx: ExtensionContext): void {
 }
 
 export default function ephemeralPlugin(pi: ExtensionAPI): void {
+	pi.registerShortcut(Key.ctrl("e"), {
+		description: "Start an ephemeral chat",
+		handler: () => {
+			// Shortcuts lack newSession(). Dispatch the command with its full context.
+			pi.sendUserMessage("/ephemeral", { expandPromptTemplates: true });
+		},
+	});
+
 	pi.registerCommand("ephemeral", {
 		description: "Start a new chat that is never saved to disk",
 		handler: async (args, ctx) => {

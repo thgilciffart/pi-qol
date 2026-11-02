@@ -115,7 +115,9 @@ The picker stays open after deletion. Use `/delete-threads search text` to start
 
 ## Start an ephemeral chat
 
-Run `/ephemeral`, then accept the confirmation. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+Press Ctrl+E or run `/ephemeral`, then accept the confirmation. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+
+Ctrl+E replaces Pi's default end-of-line shortcut. Use End to move to the end of the line.
 
 To send an initial prompt into the new chat:
 

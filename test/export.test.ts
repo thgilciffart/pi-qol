@@ -149,5 +149,6 @@ test('Pi loads the extension and registers the command', async () => {
   assert.equal(result.extensions.length, 1);
   for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name', 'continue']) assert.ok(result.extensions[0].commands.has(command));
   assert.ok(result.extensions[0].shortcuts.has('ctrl+alt+c'));
+  assert.ok(result.extensions[0].shortcuts.has('ctrl+e'));
   for (const tool of ['get_goal', 'create_goal', 'update_goal']) assert.ok(result.extensions[0].tools.has(tool));
 });

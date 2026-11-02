@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import plugin from "../src/ephemeral.ts";
 
 /**
@@ -64,6 +67,7 @@ function createHarness(options: HarnessOptions = {}) {
 	const commands = new Map<string, Command>();
 	const handlers = new Map<string, Handler>();
 	const pi = {
+		registerShortcut: () => {},
 		registerCommand: (name: string, command: Command) => {
 			commands.set(name, command);
 		},
@@ -211,4 +215,45 @@ describe("/ephemeral", () => {
 		await onSavedSessionStart({ type: "session_start" }, saved.ctx);
 		expect(saved.recorded.statuses.at(-1)).toEqual({ key: "ephemeral", text: undefined });
 	});
+});
+
+test("Ctrl+E dispatches the real command without sending a model message", async () => {
+	const { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+	const dir = await mkdtemp(join(tmpdir(), "pi-qol-ephemeral-shortcut-"));
+	let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
+	try {
+		const settingsManager = SettingsManager.inMemory();
+		const resourceLoader = new DefaultResourceLoader({ cwd: dir, agentDir: dir, settingsManager, extensionFactories: [plugin],
+			noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+		await resourceLoader.reload();
+		const modelRuntime = await ModelRuntime.create({ authPath: join(dir, "auth.json"), modelsPath: null, refreshOnCreate: false });
+		const manager = SessionManager.create(dir, dir);
+		const created = await createAgentSession({ cwd: dir, agentDir: dir, modelRuntime, resourceLoader, settingsManager, sessionManager: manager, noTools: "all" });
+		session = created.session;
+		const confirmations: string[] = [];
+		const notices: string[] = [];
+		const errors: string[] = [];
+		await session.bindExtensions({
+			uiContext: {
+				confirm: async (title: string) => { confirmations.push(title); return false; },
+				notify: (message: string) => { notices.push(message); },
+				setStatus: () => {},
+			} as never,
+			onError: error => { errors.push(error.error); },
+		});
+		let requests = 0;
+		session.agent.streamFunction = async () => { requests++; throw new Error("Shortcut must dispatch /ephemeral, not prompt a model"); };
+		const extension = created.extensionsResult.extensions.find(extension => extension.shortcuts.has("ctrl+e"))!;
+		await extension.shortcuts.get("ctrl+e")!.handler(session.extensionRunner.createContext());
+		await new Promise<void>(resolve => setImmediate(resolve));
+		expect(confirmations).toEqual(["Start a new ephemeral chat?"]);
+		expect(notices).toContain("No new chat was created.");
+		expect(requests).toBe(0);
+		expect(manager.getBranch().filter(entry => entry.type === "message")).toHaveLength(0);
+		expect(manager.isPersisted()).toBe(true);
+		expect(errors).toEqual([]);
+	} finally {
+		session?.dispose();
+		await rm(dir, { recursive: true, force: true });
+	}
 });

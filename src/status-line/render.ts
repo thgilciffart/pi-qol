@@ -1,8 +1,8 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { stripTerminalSequences, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import {
-  extensionKey, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type StatusLineConfig,
+  extensionKey, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type Side, type StatusLineConfig,
 } from './config.ts';
 
 export interface UsageSummary {
@@ -226,7 +226,7 @@ const MODULES: Record<BuiltinModuleId, ModuleRenderer> = {
 const SEPARATOR = ' · ';
 const MAX_LINES_PER_ROW = 2;
 
-export interface RenderedSegment { id: string; text: string }
+export interface RenderedSegment { id: string; text: string; side: Side }
 
 /** Rendered text of each enabled module, grouped by row, in configured order. */
 export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, theme: Theme): Map<Row, RenderedSegment[]> {
@@ -242,12 +242,13 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
     } else {
       try { text = MODULES[item.id as BuiltinModuleId](data, painter); } catch { text = undefined; }
     }
-    if (text) rows.get(item.row)!.push({ id: item.id, text });
+    if (text && visibleWidth(text) > 0) rows.get(item.row)!.push({ id: item.id, text, side: item.side ?? 'left' });
   }
   return rows;
 }
 
-function packRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string): string[] {
+function packRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string,
+  maxLines = MAX_LINES_PER_ROW): string[] {
   const lines: string[] = [];
   const sepWidth = visibleWidth(separator);
   let line = '';
@@ -263,7 +264,7 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
       continue;
     }
     if (line) {
-      if (lines.length + 1 >= MAX_LINES_PER_ROW) break;
+      if (lines.length + 1 >= maxLines) break;
       lines.push(line);
     }
     line = text;
@@ -276,7 +277,31 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
     line = lineWidth + markerWidth <= width ? `${line} ${marker}` : `${truncateToWidth(line, Math.max(0, width - markerWidth), '…')} ${marker}`;
   }
   if (line) lines.push(line);
-  return lines;
+  return lines.map(line => visibleWidth(line) > width ? truncateToWidth(line, width, '') : line);
+}
+
+/** Keep each side in configured order and anchor the right group to the terminal edge. */
+function alignRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string): string[] {
+  const left = segments.filter(segment => segment.side === 'left');
+  const right = segments.filter(segment => segment.side === 'right');
+  const alignRight = (line: string) => ' '.repeat(Math.max(0, width - visibleWidth(line))) + line;
+  if (!right.length) return packRow(left, width, separator, more);
+  if (!left.length) return packRow(right, width, separator, more).map(alignRight);
+  // A one-column terminal cannot fit both sides on one line.
+  if (width === 1) return [...packRow(left, width, separator, more, 1), ...packRow(right, width, separator, more, 1)];
+
+  const gap = Math.min(2, width - 2);
+  const available = width - gap;
+  const needed = (group: RenderedSegment[]) => visibleWidth(group.map(segment => segment.text).join(separator));
+  const leftWidth = Math.min(needed(left), Math.max(1, available - Math.min(needed(right), Math.floor(available / 2))));
+  const rightWidth = available - leftWidth;
+  const leftLines = packRow(left, leftWidth, separator, more);
+  const rightLines = packRow(right, rightWidth, separator, more);
+  return Array.from({ length: Math.max(leftLines.length, rightLines.length) }, (_, index) => {
+    const l = leftLines[index] ?? '';
+    const r = rightLines[index] ?? '';
+    return r ? l + ' '.repeat(Math.max(0, width - visibleWidth(l) - visibleWidth(r))) + r : l;
+  });
 }
 
 /** Render footer lines. Every line fits `width`; each configured row wraps to at most two lines. */
@@ -287,9 +312,12 @@ export function renderStatusLine(data: StatusSnapshot, config: StatusLineConfig,
   const more = (count: number) => painter.paint('label', `+${count}`);
   const lines: string[] = [];
   for (const segments of renderSegments(data, config, theme).values()) {
-    if (segments.length) lines.push(...packRow(segments, width, separator, more));
+    if (segments.length) lines.push(...alignRow(segments, width, separator, more));
   }
-  return lines.map(line => visibleWidth(line) > width ? truncateToWidth(line, width, '') : line);
+  return lines.map(line => {
+    const fitted = visibleWidth(line) > width ? truncateToWidth(line, width, '') : line;
+    return config.colorMode === 'mono' ? stripTerminalSequences(fitted) : fitted;
+  });
 }
 
 /** Representative data for the editor preview when the live session has little to show. */

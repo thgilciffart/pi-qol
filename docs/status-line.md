@@ -27,8 +27,9 @@ The editor has a live preview and a sample preview. Changes remain in the draft 
 | Home or End | Selects the first or last item. |
 | Page Up or Page Down | Moves the selection by one page. |
 | Space | Toggles a module or changes the selected setting. |
-| Shift+Up or Shift+Down, Alt+Up or Alt+Down, `[` or `]` | Moves the selected module. Crossing a row boundary moves it into the other row. |
-| Left or Right | Assigns the selected module to row 1 or row 2. |
+| Shift+Up or Shift+Down, Alt+Up or Alt+Down, `[` or `]` | Moves the selected module earlier or later within its side. Crossing a row boundary moves it into the other row on the same side. |
+| Left or Right | Assigns the selected module to the left or right side. |
+| `1` or `2` | Assigns the selected module to row 1 or row 2. |
 | `c` | Cycles the colour mode. |
 | `p` | Switches between live and sample previews. |
 | `r` | Restores defaults in the draft. |
@@ -38,9 +39,11 @@ The editor has a live preview and a sample preview. Changes remain in the draft 
 
 ## Modules
 
-Each module can be enabled, disabled, reordered, or assigned to the first or second row. Empty values do not occupy space. Each row wraps between modules onto at most two terminal lines. Overflow displays `+N` for the remaining modules. Every line fits the terminal width.
+Each module can be enabled, disabled, reordered, or assigned to either side of the first or second row. The editor groups modules by row and side. Within each side, list order determines display order from left to right. A right group ends at the terminal's right edge, with empty space between the two groups.
 
-By default, row 1 contains ready or working, model, thinking level, working directory, branch, and session name. Row 2 contains context remaining, token usage, cache usage, cost, and external statuses.
+Empty values do not occupy space. Each side wraps between modules onto at most two terminal lines. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. Overflow displays `+N` for the remaining modules. Every line fits the terminal width. A one-column terminal stacks the two sides.
+
+By default, row 1 contains ready or working, model, thinking level, working directory, branch, and session name. Row 2 contains context remaining, token usage, cache usage, cost, and external statuses. Modules start on the left. Existing settings retain their layout until a module moves to the right.
 
 | Module | Value |
 | --- | --- |
@@ -81,7 +84,7 @@ Pi has one custom footer slot. If another plugin calls `setFooter`, the latest c
 
 Settings apply across chats and are stored in `<agent directory>/pi-qol/status-line.json`, normally `~/.pi/agent/pi-qol/status-line.json`.
 
-The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to `1` or `2`. Array order determines module order within a row.
+The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to `1` or `2`. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
 
 Built-in IDs are `state`, `model`, `thinking`, `cwd`, `git`, `session`, `context`, `tokens`, `cache`, and `cost`. External status IDs use `extension:<key>`. Missing built-in entries receive their default settings. Disabling a built-in module requires an entry with `enabled` set to `false`.
 

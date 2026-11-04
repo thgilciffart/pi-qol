@@ -144,4 +144,68 @@ describe('renderStatusLine', () => {
     expect(formatCwd('/home/me/a', '/home/me')).toBe('~/a');
     expect(formatCwd('/home/meow', '/home/me')).toBe('/home/meow');
   });
+
+  test('anchors each side and preserves left-to-right order within each group', () => {
+    const cfg = config({ colorMode: 'mono' });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    cfg.items.push(
+      { id: 'extension:r1', enabled: true, row: 1, side: 'right' },
+      { id: 'extension:l1', enabled: true, row: 1 },
+      { id: 'extension:r2', enabled: true, row: 1, side: 'right' },
+      { id: 'extension:l2', enabled: true, row: 1, side: 'left' },
+      { id: 'extension:r3', enabled: true, row: 2, side: 'right' },
+    );
+    const data = snapshot({ extensionStatuses: new Map([['l1', 'L1'], ['l2', 'L2'], ['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']]) });
+    const lines = renderStatusLine(data, cfg, fakeTheme().theme, 40);
+    expect(lines).toEqual([
+      'L1 · L2' + ' '.repeat(26) + 'R1 · R2',
+      ' '.repeat(38) + 'R3',
+    ]);
+    expect(lines.map(visibleWidth)).toEqual([40, 40]);
+  });
+
+  test('gives a short side its needed width while keeping the other side visible', () => {
+    const cfg = config({ colorMode: 'mono' });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    cfg.items.push(
+      { id: 'extension:left', enabled: true, row: 1 },
+      { id: 'extension:right', enabled: true, row: 1, side: 'right' },
+    );
+    for (const [left, right] of [['L'.repeat(100), 'R'], ['L', 'R'.repeat(100)]]) {
+      const data = snapshot({ extensionStatuses: new Map([['left', left], ['right', right]]) });
+      const [line] = renderStatusLine(data, cfg, fakeTheme().theme, 40);
+      expect(line).toStartWith('L');
+      expect(line).toMatch(/L.*  R/);
+      expect(visibleWidth(line)).toBe(40);
+    }
+  });
+
+  test('wraps right-only content against the right edge and skips empty styled statuses', () => {
+    const cfg = config({ colorMode: 'mono' });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: item.id === 'model', side: 'right' }));
+    cfg.items.push({ id: 'extension:other', enabled: true, row: 1, side: 'right' });
+    const data = snapshot({ extensionStatuses: new Map([['other', 'abcdefghij']]) });
+    expect(renderStatusLine(data, cfg, fakeTheme().theme, 12)).toEqual(['    gpt-test', '  abcdefghij']);
+    cfg.items.find(item => item.id === 'model')!.side = 'left';
+    cfg.colorMode = 'colorful';
+    data.extensionStatuses = new Map([['other', '\x1b[31m\x1b[0m']]);
+    expect(renderStatusLine(data, cfg, fakeTheme().theme, 40).map(strip)).toEqual(['gpt-test']);
+  });
+
+  test('fits both sides at every terminal width with Unicode, ANSI, wrapping, and overflow', () => {
+    const cfg = config();
+    cfg.items.forEach((item, index) => { item.side = index % 2 ? 'right' : 'left'; });
+    cfg.items.push({ id: 'extension:plugin', enabled: true, row: 2, side: 'right' });
+    const data = snapshot({ sessionName: '日本語 🚀 '.repeat(12),
+      extensionStatuses: new Map([['plugin', '\x1b[35m👩‍💻 ready\x1b[0m']]) });
+    for (const mode of ['colorful', 'theme', 'mono'] as const) {
+      cfg.colorMode = mode;
+      for (let width = 1; width <= 120; width++) {
+        const lines = renderStatusLine(data, cfg, fakeTheme().theme, width);
+        expect(lines.length).toBeLessThanOrEqual(4);
+        for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+        if (mode === 'mono') expect(lines.join('')).not.toContain('\x1b');
+      }
+    }
+  });
 });

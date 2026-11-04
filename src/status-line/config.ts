@@ -18,11 +18,14 @@ const MAX_KEY_LENGTH = 200;
 
 export type ModuleId = BuiltinModuleId | `extension:${string}`;
 export type Row = 1 | 2;
+export type Side = 'left' | 'right';
 
 export interface StatusLineItem {
   id: ModuleId;
   enabled: boolean;
   row: Row;
+  /** Omitted in older settings; defaults to the left. */
+  side?: Side;
 }
 
 export interface StatusLineConfig {
@@ -109,7 +112,7 @@ export function validateConfig(value: unknown): StatusLineConfig {
   const seen = new Set<string>();
   const items: StatusLineItem[] = rawItems.map((raw, index) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`items[${index}] must be an object.`);
-    const { id, enabled: itemEnabled = true, row = 1 } = raw as Record<string, unknown>;
+    const { id, enabled: itemEnabled = true, row = 1, side } = raw as Record<string, unknown>;
     if (typeof id !== 'string') fail(`items[${index}].id must be a string.`);
     if (!isBuiltinModule(id)) {
       const key = id.startsWith(EXTENSION_PREFIX) ? id.slice(EXTENSION_PREFIX.length) : '';
@@ -120,7 +123,8 @@ export function validateConfig(value: unknown): StatusLineConfig {
     seen.add(id);
     if (typeof itemEnabled !== 'boolean') fail(`items[${index}].enabled must be true or false.`);
     if (row !== 1 && row !== 2) fail(`items[${index}].row must be 1 or 2.`);
-    return { id: id as ModuleId, enabled: itemEnabled, row };
+    if (side !== undefined && side !== 'left' && side !== 'right') fail(`items[${index}].side must be "left" or "right".`);
+    return { id: id as ModuleId, enabled: itemEnabled, row, ...(side === undefined ? {} : { side }) };
   });
   // Built-in modules added in later versions appear with their defaults.
   for (const item of DEFAULT_ITEMS) if (!seen.has(item.id)) items.push({ ...item });

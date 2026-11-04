@@ -66,7 +66,7 @@ See [statistics and command reference](docs/reference.md) for measurement defini
 
 ## Customise the status line
 
-Run `/status-line` to open the status line editor. Choose which modules appear, change their order, and preview the result before saving. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
+Run `/status-line` to open the status line editor. Choose which modules appear, place them on the left or right of either row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1`/`2` to choose a row, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
 
 The editor also lists status text published by other plugins through Pi's `setStatus` API. New status keys appear automatically. Your choices persist across chats, including preferences for plugins that are temporarily inactive.
 

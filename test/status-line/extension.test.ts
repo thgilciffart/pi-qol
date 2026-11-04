@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import statusLine from '../../src/status-line/index.ts';
+import { defaultConfig } from '../../src/status-line/config.ts';
 import { fakeTheme, strip } from './helpers.ts';
 
 type Handler = (event: any, ctx: any) => unknown;
@@ -256,6 +257,42 @@ describe('status line extension', () => {
       expect(c.notices.at(-1)?.[0]).toContain('discarded');
       await expect(readFile(h.configPath, 'utf8')).rejects.toThrow();
     } finally { await h.cleanup(); }
+  });
+
+  test('editor placement and ordering of external statuses survive a fresh extension load', async () => {
+    const config = defaultConfig();
+    config.items = config.items.map(item => ({ ...item, enabled: item.id === 'model' || item.id === 'state',
+      ...(item.id === 'model' ? { side: 'right' as const } : {}) }));
+    const h = await harness(JSON.stringify(config));
+    let reopened: Awaited<ReturnType<typeof harness>> | undefined;
+    try {
+      const c = context();
+      c.data.statuses.set('other-plugin', 'plugin');
+      await h.emit('session_start', c.ctx);
+      const opened = h.run('', c.ctx);
+      const editor = await until(c.editor);
+      editor.handleInput('\x1b[F'); // new plugin status on row 2, left
+      editor.handleInput('\x1b[C'); // right
+      editor.handleInput('1'); // row 1
+      editor.handleInput('['); // before the model
+      editor.handleInput('\r');
+      await opened;
+      const first = c.render(80)[0];
+      expect(first).toStartWith('● ready');
+      expect(first).toEndWith('plugin · test-model');
+      expect(first.length).toBe(80);
+      reopened = await harness(JSON.stringify(await h.saved()));
+      const next = context();
+      next.data.statuses.set('other-plugin', 'plugin');
+      await reopened.emit('session_start', next.ctx);
+      expect(next.render(80)).toEqual(c.render(80));
+      next.data.statuses.clear();
+      expect(next.render(80)[0]).toEndWith('test-model');
+      next.data.statuses.set('other-plugin', 'plugin');
+      expect(next.render(80)[0]).toBe(first);
+      await reopened.emit('session_shutdown', next.ctx);
+      await h.emit('session_shutdown', c.ctx);
+    } finally { await h.cleanup(); await reopened?.cleanup(); }
   });
 
   test('caches usage scans between renders until the leaf or an event changes', async () => {

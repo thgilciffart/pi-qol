@@ -2,7 +2,7 @@ import type { Theme } from '@earendil-works/pi-coding-agent';
 import { decodeKittyPrintable, Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type TUI } from '@earendil-works/pi-tui';
 import {
   BUILTIN_LABELS, COLOR_MODES, cloneConfig, defaultConfig, extensionKey, resolveItems,
-  type BuiltinModuleId, type StatusLineConfig, type StatusLineItem,
+  type BuiltinModuleId, type Side, type StatusLineConfig, type StatusLineItem,
 } from './config.ts';
 import { renderStatusLine, sampleSnapshot, sanitizeInline, type StatusSnapshot } from './render.ts';
 
@@ -23,12 +23,13 @@ const COLOR_LABELS: Record<StatusLineConfig['colorMode'], string> = {
 };
 
 export const EDITOR_HINTS = [
-  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ row', 'c colour', 'p preview',
+  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1/2 row', 'c colour', 'p preview',
   'r reset', 'Enter/Ctrl+S save', 'Esc cancel',
 ];
 
-function sortByRow(items: StatusLineItem[]): StatusLineItem[] {
-  return [...items.filter(item => item.row === 1), ...items.filter(item => item.row === 2)];
+function sortByPlacement(items: StatusLineItem[]): StatusLineItem[] {
+  return [1, 2].flatMap(row => (['left', 'right'] as const).flatMap(side =>
+    items.filter(item => item.row === row && (item.side ?? 'left') === side)));
 }
 
 export class StatusLineEditor implements Component {
@@ -56,7 +57,7 @@ export class StatusLineEditor implements Component {
   }
 
   private withPresentKeys(config: StatusLineConfig): StatusLineConfig {
-    return { ...config, items: sortByRow(resolveItems(config, this.presentStatuses().keys())) };
+    return { ...config, items: sortByPlacement(resolveItems(config, this.presentStatuses().keys())) };
   }
 
   private refreshPresentKeys(): void {
@@ -101,12 +102,14 @@ export class StatusLineEditor implements Component {
     const items = this.draft.items;
     const item = items[index]!;
     const neighbour = items[index + direction];
-    if (neighbour && neighbour.row === item.row) {
+    if (neighbour && neighbour.row === item.row && (neighbour.side ?? 'left') === (item.side ?? 'left')) {
       items[index] = neighbour;
       items[index + direction] = item;
       this.cursor += direction;
     } else if (direction === -1 && item.row === 2) item.row = 1;
     else if (direction === 1 && item.row === 1) item.row = 2;
+    this.draft.items = sortByPlacement(items);
+    this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
   }
 
   private setRow(row: 1 | 2): void {
@@ -115,7 +118,15 @@ export class StatusLineEditor implements Component {
     const item = this.draft.items[index]!;
     if (item.row === row) return;
     item.row = row;
-    this.draft.items = sortByRow(this.draft.items);
+    this.draft.items = sortByPlacement(this.draft.items);
+    this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
+  }
+
+  private setSide(side: Side): void {
+    const item = this.draft.items[this.cursor - SETTINGS.length];
+    if (!item || (item.side ?? 'left') === side) return;
+    item.side = side;
+    this.draft.items = sortByPlacement(this.draft.items);
     this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
   }
 
@@ -144,8 +155,10 @@ export class StatusLineEditor implements Component {
     else if (matchesKey(data, Key.end)) this.cursor = this.rowCount - 1;
     else if (matchesKey(data, Key.pageUp)) this.cursor = Math.max(0, this.cursor - this.pageSize);
     else if (matchesKey(data, Key.pageDown)) this.cursor = Math.min(this.rowCount - 1, this.cursor + this.pageSize);
-    else if (matchesKey(data, Key.left)) this.setRow(1);
-    else if (matchesKey(data, Key.right)) this.setRow(2);
+    else if (matchesKey(data, Key.left)) this.setSide('left');
+    else if (matchesKey(data, Key.right)) this.setSide('right');
+    else if (printable === '1') this.setRow(1);
+    else if (printable === '2') this.setRow(2);
     else if (matchesKey(data, Key.space) || data === ' ') this.toggle();
     else if (printable === 'c') this.cycleColor();
     else if (printable === 'p') this.preview = this.preview === 'live' ? 'sample' : 'live';
@@ -218,15 +231,17 @@ export class StatusLineEditor implements Component {
     const hints = wrapTextWithAnsi(t.fg('dim', EDITOR_HINTS.join(' • ')), inner);
     // Leave room for Pi's footer and space around the custom editor on short terminals.
     const height = this.tui.terminal ? Math.max(1, this.tui.terminal.rows - 5) : Infinity;
-    const reserved = hints.length + 5 + Number(Boolean(this.notice)) + Number(!this.options.discoveryAvailable);
+    const groups = new Set(this.draft.items.map(item => `${item.row}:${item.side ?? 'left'}`)).size;
+    const reserved = hints.length + 3 + groups + Number(Boolean(this.notice)) + Number(!this.options.discoveryAvailable);
     this.pageSize = Math.max(1, Math.min(MAX_VISIBLE_ITEMS, height - lines.length - reserved));
     const start = Math.max(0, Math.min(total - this.pageSize, itemIndex - Math.floor(this.pageSize / 2)));
     const end = Math.min(total, start + this.pageSize);
     add(t.fg('muted', start > 0 ? `  ↑ ${start} more` : ''));
-    let lastRow: number | undefined = start > 0 ? this.draft.items[start - 1]!.row : undefined;
+    let lastGroup: string | undefined;
     for (let i = start; i < end; i++) {
       const item = this.draft.items[i]!;
-      if (item.row !== lastRow) { add(t.fg('mdHeading', `Row ${item.row}`)); lastRow = item.row; }
+      const group = `Row ${item.row} · ${item.side === 'right' ? 'Right' : 'Left'}`;
+      if (group !== lastGroup) { add(t.fg('mdHeading', group)); lastGroup = group; }
       const selected = i === itemIndex;
       const pointer = selected ? t.fg('accent', '❯ ') : '  ';
       const box = item.enabled ? t.fg('success', '[x]') : t.fg('muted', '[ ]');

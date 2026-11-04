@@ -34,6 +34,8 @@ describe('status line settings', () => {
       [{ items: [{ id: 'extension:' }] }, /not a built-in module/],
       [{ items: [{ id: 'model' }, { id: 'model' }] }, /more than once/],
       [{ items: [{ id: 'model', row: 3 }] }, /row must be 1 or 2/],
+      [{ items: [{ id: 'model', side: 'center' }] }, /side must be "left" or "right"/],
+      [{ items: [{ id: 'model', side: null }] }, /side must be "left" or "right"/],
       [{ items: [{ id: 'model', enabled: 1 }] }, /enabled must be true or false/],
     ];
     for (const [value, message] of cases) expect(() => validateConfig(value)).toThrow(message);
@@ -102,5 +104,24 @@ describe('status line settings', () => {
     expect(resolveItems({ ...config, showNewExtensionStatuses: false }, ['new']).at(-1))
       .toEqual({ id: 'extension:new', enabled: false, row: 2 });
     expect(config.items.some(item => item.id === 'extension:alpha')).toBe(false);
+  });
+
+  test('preserves side and order through saving while older settings remain valid', async () => {
+    const dir = await tempDir();
+    try {
+      const old = validateConfig({ items: [{ id: 'model', row: 1 }] });
+      expect(old.items[0].side ?? 'left').toBe('left');
+      const config = validateConfig({ items: [
+        { id: 'extension:missing', row: 2, side: 'right', enabled: false },
+        { id: 'thinking', row: 1, side: 'right' },
+        { id: 'model', row: 1, side: 'right' },
+        { id: 'cwd', row: 1, side: 'left' },
+      ] });
+      const path = join(dir, 'status-line.json');
+      await saveConfig(path, config);
+      expect(await loadConfig(path)).toEqual({ status: 'ok', config });
+      expect(resolveItems(config, ['new']).slice(0, 4)).toEqual(config.items.slice(0, 4));
+      expect(resolveItems(config, ['new']).at(-1)?.side ?? 'left').toBe('left');
+    } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });

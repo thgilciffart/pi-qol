@@ -81,8 +81,8 @@ describe('status line editor', () => {
     for (let i = 0; i < FIRST_ITEM + 5; i++) g.press(DOWN); // session, last in row 1
     g.press(SHIFT_DOWN);                                    // crosses into row 2
     g.press(']');                                           // swaps with context
-    g.press(UP, UP, LEFT);                                  // context... then cwd stays row 1
-    g.press(DOWN, DOWN, DOWN, RIGHT);                       // move another module to row 2
+    g.press(UP, UP, '1');                                   // context... then cwd stays row 1
+    g.press(DOWN, DOWN, DOWN, '2');                         // move another module to row 2
     g.press(ENTER);
     result = g.result() as StatusLineConfig;
     const row2 = result.items.filter(item => item.row === 2).map(item => item.id);
@@ -104,6 +104,42 @@ describe('status line editor', () => {
     const result = h.result() as StatusLineConfig;
     expect(result.items.map(item => item.id)).toContain('extension:absent');
     expect(result.items.filter(item => item.id.startsWith('extension:'))).toHaveLength(3);
+  });
+
+  test('changes side, reorders right-side modules, and keeps the selection when changing rows', () => {
+    const config = defaultConfig();
+    for (const item of config.items) if (item.id === 'model' || item.id === 'thinking') item.side = 'right';
+    const h = mount(config);
+    for (let i = 0; i < FIRST_ITEM + 4; i++) h.press(DOWN); // model, first module on the right
+    expect(h.text()).toContain('Row 1 · Right');
+    expect(h.text()).toContain('❯ [x] Model');
+    h.press(']'); // thinking now appears before model on the right
+    expect(h.text().split('\n').find(line => line.includes('● ready'))?.trimEnd()).toEndWith('think high · gpt-test');
+    h.press(LEFT);
+    expect(h.text()).toContain('❯ [x] Model');
+    h.press(RIGHT, '2');
+    expect(h.text()).toContain('Row 2 · Right');
+    expect(h.text()).toContain('❯ [x] Model');
+    h.press(ENTER);
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.items.find(item => item.id === 'model')).toEqual({ id: 'model', enabled: true, row: 2, side: 'right' });
+    expect(saved.items.find(item => item.id === 'thinking')?.side).toBe('right');
+    expect(saved.items.filter(item => item.side !== 'right').map(item => item.id)).toEqual(
+      config.items.filter(item => item.side !== 'right').map(item => item.id));
+  });
+
+  test('reorders external modules on the right and preserves inactive modules', () => {
+    const config = defaultConfig();
+    config.items.push({ id: 'extension:absent', row: 2, side: 'right', enabled: false });
+    const h = mount(config, new Map([['active', 'build ok']]));
+    h.press('\x1b[F', UP, RIGHT); // active moves from the left to the right, before absent
+    expect(h.text()).toContain('❯ [x] extension: active');
+    h.press(']', ENTER); // put absent before active within the right group
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.items.filter(item => item.side === 'right')).toEqual([
+      { id: 'extension:absent', row: 2, side: 'right', enabled: false },
+      { id: 'extension:active', row: 2, side: 'right', enabled: true },
+    ]);
   });
 
   test('Esc cancels immediately when clean and asks for a second Esc when dirty', () => {

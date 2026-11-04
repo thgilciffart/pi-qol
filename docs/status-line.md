@@ -93,6 +93,8 @@ External status text retains its ANSI colours in colour modes. Monochrome remove
 
 Pi has one custom footer slot. If another plugin calls `setFooter`, the latest call determines which footer appears. `/statusline on` installs the pi-qol footer again. `/statusline off` restores Pi's built-in footer when pi-qol owns the footer. It leaves a footer installed by another plugin in place.
 
+If the saved layout only appears after running `/statusline`, another plugin may be replacing the footer at startup. For `pi-subagents`, set `"indicatorPosition": "status"` in `~/.pi/agent/subagents/settings.json`, preserving any other settings, then run `/reload`. This keeps the pi-qol layout active at startup and shows subagent status through the `extension:pi-subagents` module. The default `"footer-right"` mode replaces the whole footer.
+
 ## Settings
 
 Settings apply across chats and are stored in `<agent directory>/pi-qol/status-line.json`, normally `~/.pi/agent/pi-qol/status-line.json`.

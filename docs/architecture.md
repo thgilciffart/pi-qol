@@ -13,7 +13,7 @@
 | Response statistics | [`src/metrics.ts`](../src/metrics.ts) | Computes per-response timing and renders persisted transcript entries. | Final assistant reply statistics |
 | Interrupted turns | [`src/continue.ts`](../src/continue.ts) | Checks the active branch before sending a hidden continuation. | `/continue`, Ctrl+Alt+C |
 | Thinking effort | [`src/thinking.ts`](../src/thinking.ts) | Uses Pi's supported levels for the current model. | Alt+, and Alt+. |
-| Status line | [`src/status-line/index.ts`](../src/status-line/index.ts) | Settings, command parsing, footer lifecycle, data snapshots, rendering, sanitization, and the editor have separate modules. | `/status-line` |
+| Status line | [`src/status-line/index.ts`](../src/status-line/index.ts) | Settings, command parsing, footer lifecycle, data snapshots, rendering, sanitization, and the editor have separate modules. | `/statusline` |
 | HTML export | [`src/export/index.ts`](../src/export/index.ts) | Target resolution and HTML transformation are separate from command orchestration. `native-export.ts` adapts Pi's exporter. Other modules handle the theme, session data, redaction, math, and printing. | `/better-export` |
 | Questionnaires | [`src/ask-questions/index.ts`](../src/ask-questions/index.ts) | `extension.ts` owns tool registration and background lifecycle. `questions.ts` and `schema.ts` define answers and validation. `fallback.ts` supports dialog-only modes. `ui/state.ts`, `ui/render.ts`, and `ui/ask-questionnaire.ts` separate answer operations, drawing, and input handling. | `ask_user` |
 

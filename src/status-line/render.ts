@@ -2,7 +2,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import {
-  extensionKey, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type Side, type StatusLineConfig,
+  extensionKey, isSeparator, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type Side, type StatusLineConfig,
 } from './config.ts';
 import { sanitizeInline } from './sanitize.ts';
 
@@ -160,7 +160,7 @@ const MODULES: Record<BuiltinModuleId, ModuleRenderer> = {
   },
 };
 
-const SEPARATOR = ' · ';
+const ITEM_GAP = '  ';
 const MAX_LINES_PER_ROW = 2;
 
 export interface RenderedSegment { id: string; text: string; side: Side }
@@ -173,7 +173,9 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
     if (!item.enabled) continue;
     const key = extensionKey(item.id);
     let text: string | undefined;
-    if (key !== undefined) {
+    if (isSeparator(item.id)) {
+      text = painter.paint('separator', '·');
+    } else if (key !== undefined) {
       const raw = data.extensionStatuses.get(key);
       text = raw === undefined ? undefined : sanitizeInline(raw, config.colorMode !== 'mono');
     } else {
@@ -184,34 +186,51 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
   return rows;
 }
 
+/** Separators decorate the gap before the next module, never a line boundary. */
+function contentSegments(segments: RenderedSegment[], gap: string): { text: string; prefix: string }[] {
+  const content: { text: string; prefix: string }[] = [];
+  let prefix = '';
+  for (const segment of segments) {
+    if (isSeparator(segment.id)) {
+      if (content.length) prefix += (prefix ? gap : '') + segment.text;
+    } else {
+      content.push({ text: segment.text, prefix });
+      prefix = '';
+    }
+  }
+  return content;
+}
+
 function packRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string,
   maxLines = MAX_LINES_PER_ROW, nextLineWidth = width): string[] {
   const lines: string[] = [];
-  const sepWidth = visibleWidth(separator);
+  const content = contentSegments(segments, separator);
   let line = '';
   let lineWidth = 0;
   let lineLimit = width;
   const fit = (text: string) => visibleWidth(text) > lineLimit ? truncateToWidth(text, lineLimit, '…') : text;
   let index = 0;
-  for (; index < segments.length; index++) {
-    let text = fit(segments[index]!.text);
+  for (; index < content.length; index++) {
+    const segment = content[index]!;
+    const between = separator + (segment.prefix ? segment.prefix + separator : '');
+    let text = fit(segment.text);
     let textWidth = visibleWidth(text);
-    if (line && lineWidth + sepWidth + textWidth <= lineLimit) {
-      line += separator + text;
-      lineWidth += sepWidth + textWidth;
+    if (line && lineWidth + visibleWidth(between) + textWidth <= lineLimit) {
+      line += between + text;
+      lineWidth += visibleWidth(between) + textWidth;
       continue;
     }
     if (line) {
       if (lines.length + 1 >= maxLines) break;
       lines.push(line);
       lineLimit = nextLineWidth;
-      text = fit(segments[index]!.text);
+      text = fit(segment.text);
       textWidth = visibleWidth(text);
     }
     line = text;
     lineWidth = textWidth;
   }
-  const remaining = segments.length - index;
+  const remaining = content.length - index;
   if (remaining > 0) {
     const marker = more(remaining);
     const markerWidth = visibleWidth(marker) + 1;
@@ -226,8 +245,12 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
 
 /** Keep each side in configured order and anchor the right group to the terminal edge. */
 function alignRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string): string[] {
-  const left = segments.filter(segment => segment.side === 'left');
-  const right = segments.filter(segment => segment.side === 'right');
+  const populated = (side: Side) => {
+    const group = segments.filter(segment => segment.side === side);
+    return group.some(segment => !isSeparator(segment.id)) ? group : [];
+  };
+  const left = populated('left');
+  const right = populated('right');
   const alignRight = (line: string) => ' '.repeat(Math.max(0, width - visibleWidth(line))) + line;
   if (!right.length) return packRow(left, width, separator, more);
   if (!left.length) return packRow(right, width, separator, more).map(alignRight);
@@ -236,7 +259,8 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
 
   const gap = Math.min(2, width - 2);
   const available = width - gap;
-  const needed = (group: RenderedSegment[]) => visibleWidth(group.map(segment => segment.text).join(separator));
+  const needed = (group: RenderedSegment[]) => visibleWidth(contentSegments(group, separator)
+    .map(segment => (segment.prefix ? segment.prefix + separator : '') + segment.text).join(separator));
   const leftWidth = Math.min(needed(left), Math.max(1, available - Math.min(needed(right), Math.floor(available / 2))));
   const rightWidth = available - leftWidth;
   let leftLines = packRow(left, leftWidth, separator, more);
@@ -257,7 +281,7 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
 export function renderStatusLine(data: StatusSnapshot, config: StatusLineConfig, theme: Theme, width: number): string[] {
   if (width <= 0) return [];
   const painter = createPainter(theme, config.colorMode);
-  const separator = painter.paint('separator', SEPARATOR);
+  const separator = ITEM_GAP;
   const more = (count: number) => painter.paint('label', `+${count}`);
   const lines: string[] = [];
   for (const segments of renderSegments(data, config, theme).values()) {

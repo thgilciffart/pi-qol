@@ -82,11 +82,13 @@ See the [goal reference](docs/goals.md) for commands, budget accounting, and con
 
 ## Customise the status line
 
-Run `/status-line` to open the status line editor. Choose which modules appear, place them on the left or right of either row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1`/`2` to choose a row, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
+Run `/statusline` to open the status line editor. Choose which modules appear, place them on the left or right of either row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1`/`2` to choose a row, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
 
 The editor also lists status text published by other plugins through Pi's `setStatus` API. New status keys appear automatically. Your choices persist across chats, including preferences for plugins that are temporarily inactive.
 
-Use `/status-line off` to restore Pi's built-in footer, or `/status-line on` to enable the custom footer again. Plugins that replace the entire footer compete for the same Pi API. Their internal modules need an integration before this editor can display them separately.
+Values are spaced without automatic dot separators. Press `s` in the editor to add a separator item, then move it like any module. Delete removes a selected separator.
+
+Use `/statusline off` to restore Pi's built-in footer, or `/statusline on` to enable the custom footer again. Plugins that replace the entire footer compete for the same Pi API. Their internal modules need an integration before this editor can display them separately.
 
 See the [status line reference](docs/status-line.md) for controls, modules, and settings.
 

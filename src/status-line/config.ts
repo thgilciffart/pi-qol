@@ -13,10 +13,10 @@ export type BuiltinModuleId = typeof BUILTIN_MODULES[number];
 /** Prefix for status keys set by other extensions through ctx.ui.setStatus(key, text). */
 export const EXTENSION_PREFIX = 'extension:';
 export const MAX_ROWS = 2;
-const MAX_ITEMS = 200;
+export const MAX_ITEMS = 200;
 const MAX_KEY_LENGTH = 200;
 
-export type ModuleId = BuiltinModuleId | `extension:${string}`;
+export type ModuleId = BuiltinModuleId | `extension:${string}` | `separator:${number}`;
 export type Row = 1 | 2;
 export type Side = 'left' | 'right';
 
@@ -88,6 +88,10 @@ export function extensionKey(id: ModuleId): string | undefined {
   return id.startsWith(EXTENSION_PREFIX) ? id.slice(EXTENSION_PREFIX.length) : undefined;
 }
 
+export function isSeparator(id: string): id is `separator:${number}` {
+  return /^separator:[1-9]\d*$/.test(id);
+}
+
 function fail(message: string): never {
   throw new Error(`Status line settings: ${message}`);
 }
@@ -114,9 +118,9 @@ export function validateConfig(value: unknown): StatusLineConfig {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`items[${index}] must be an object.`);
     const { id, enabled: itemEnabled = true, row = 1, side } = raw as Record<string, unknown>;
     if (typeof id !== 'string') fail(`items[${index}].id must be a string.`);
-    if (!isBuiltinModule(id)) {
+    if (!isBuiltinModule(id) && !isSeparator(id)) {
       const key = id.startsWith(EXTENSION_PREFIX) ? id.slice(EXTENSION_PREFIX.length) : '';
-      if (!key) fail(`items[${index}].id "${id}" is not a built-in module (${BUILTIN_MODULES.join(', ')}) or "${EXTENSION_PREFIX}<key>".`);
+      if (!key) fail(`items[${index}].id "${id}" is not a built-in module (${BUILTIN_MODULES.join(', ')}), "separator:<positive integer>", or "${EXTENSION_PREFIX}<key>".`);
       if (key.length > MAX_KEY_LENGTH) fail(`items[${index}].id is longer than ${MAX_KEY_LENGTH} characters.`);
     }
     if (seen.has(id)) fail(`items contains "${id}" more than once.`);

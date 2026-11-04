@@ -6,16 +6,16 @@ The custom status line is enabled by default in Pi's terminal UI. It displays se
 
 | Command | Behavior |
 | --- | --- |
-| `/status-line` | Opens an editor with a preview, module selection, and module ordering. |
-| `/status-line on` | Enables the custom footer. |
-| `/status-line off` | Restores Pi's built-in footer. |
-| `/status-line reset` | Restores the default configuration. |
-| `/status-line status` | Shows the current settings and settings file path. |
-| `/status-line colorful` | Selects the colourful mode. `colourful` is also accepted. |
-| `/status-line theme` | Selects the restrained theme mode. |
-| `/status-line mono` | Selects monochrome. |
+| `/statusline` | Opens an editor with a preview, module selection, and module ordering. |
+| `/statusline on` | Enables the custom footer. |
+| `/statusline off` | Restores Pi's built-in footer. |
+| `/statusline reset` | Restores the default configuration. |
+| `/statusline status` | Shows the current settings and settings file path. |
+| `/statusline colorful` | Selects the colourful mode. `colourful` is also accepted. |
+| `/statusline theme` | Selects the restrained theme mode. |
+| `/statusline mono` | Selects monochrome. |
 
-`/status-line color <mode>` and `/status-line colour <mode>` also select a colour mode. Outside the terminal UI, `/status-line` reports the configuration instead of opening the editor.
+`/statusline color <mode>` and `/statusline colour <mode>` also select a colour mode. Outside the terminal UI, `/statusline` reports the configuration instead of opening the editor.
 
 The `color` and `colour` forms require a mode. Other actions, such as `on` and `reset`, use the direct commands in the table.
 
@@ -34,6 +34,8 @@ If saved settings change while the editor is open, the save reports a conflict a
 | Shift+Up or Shift+Down, Alt+Up or Alt+Down, `[` or `]` | Moves the selected module earlier or later within its side. Crossing a row boundary moves it into the other row on the same side. |
 | Left or Right | Assigns the selected module to the left or right side. |
 | `1` or `2` | Assigns the selected module to row 1 or row 2. |
+| `s` | Adds a separator item after the selected item, on the same row and side. |
+| Delete or Backspace | Removes the selected separator item. |
 | `c` | Cycles the colour mode. |
 | `p` | Switches between live and sample previews. |
 | `r` | Restores defaults in the draft. |
@@ -48,6 +50,8 @@ Each module can be enabled, disabled, reordered, or assigned to either side of t
 Empty values do not occupy space. Each side wraps between modules onto at most two terminal lines. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. A continuation line uses the full width when the opposite side has no content on that line. Overflow displays `+N` for the remaining modules. Every line fits the terminal width. A one-column terminal stacks the two sides.
 
 By default, row 1 contains ready or working, model, thinking level, working directory, branch, and session name. Row 2 contains context remaining, token usage, cache usage, cost, and external statuses. Modules start on the left. Existing settings retain their layout until a module moves to the right.
+
+Modules use spaces between values. There are no automatic dot separators. The optional separator item displays `·` and can be added more than once. Each separator can be moved, hidden, or removed independently. A separator appears only between populated modules on the same side and terminal line, so empty modules and wrapping do not leave a dot at the edge.
 
 | Module | Value |
 | --- | --- |
@@ -84,7 +88,7 @@ The new-status visibility setting applies to all keys not yet listed in saved se
 
 External status text retains its ANSI colours in colour modes. Monochrome removes those colours. The renderer removes terminal control sequences and flattens multiline text to fit the footer.
 
-Pi has one custom footer slot. If another plugin calls `setFooter`, the latest call determines which footer appears. `/status-line on` installs the pi-qol footer again. `/status-line off` restores Pi's built-in footer when pi-qol owns the footer. It leaves a footer installed by another plugin in place.
+Pi has one custom footer slot. If another plugin calls `setFooter`, the latest call determines which footer appears. `/statusline on` installs the pi-qol footer again. `/statusline off` restores Pi's built-in footer when pi-qol owns the footer. It leaves a footer installed by another plugin in place.
 
 ## Settings
 
@@ -95,6 +99,8 @@ Each command re-reads saved settings, including manual repairs and changes saved
 The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to `1` or `2`. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
 
 Built-in IDs are `state`, `model`, `thinking`, `cwd`, `git`, `session`, `context`, `tokens`, `cache`, and `cost`. External status IDs use `extension:<key>`. Missing built-in entries receive their default settings. Disabling a built-in module requires an entry with `enabled` set to `false`.
+
+Separator items use unique IDs such as `separator:1` and `separator:2`. They have the same `enabled`, `row`, and optional `side` fields as modules. No separators are added to default or existing settings.
 
 The configuration supports at most 200 modules including built-ins. External keys can contain at most 200 characters. Empty keys are ignored. New keys start in row 2, sorted alphabetically, with visibility determined by `showNewExtensionStatuses`.
 

@@ -56,7 +56,7 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
   function reportLoadError(ctx: ExtensionContext): void {
     if (!loadError || errorReported || !ctx.hasUI) return;
     errorReported = true;
-    ctx.ui.notify(`${loadError}\nUsing default status line settings. The file was not changed; fix it or run /status-line reset.`, 'warning');
+    ctx.ui.notify(`${loadError}\nUsing default status line settings. The file was not changed; fix it or run /statusline reset.`, 'warning');
   }
 
   function apply(ctx: ExtensionContext): void {
@@ -75,7 +75,7 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
     // Another Pi process or a manual repair may have updated the shared file.
     const current = await loadConfig(configPath);
     if (expected && JSON.stringify(current.config) !== JSON.stringify(expected)) {
-      throw new Error('Settings changed while the editor was open. Your saved settings were kept. Open /status-line again to edit the latest layout.');
+      throw new Error('Settings changed while the editor was open. Your saved settings were kept. Open /statusline again to edit the latest layout.');
     }
     const next = update(cloneConfig(current.config));
     const backup = await saveConfig(configPath, next, { backupExisting: current.status === 'invalid' });
@@ -125,8 +125,8 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
     }
   }
 
-  pi.registerCommand('status-line', {
-    description: 'Configure the pi-qol status line (footer)',
+  pi.registerCommand('statusline', {
+    description: 'Use /statusline to configure the pi-qol footer',
     getArgumentCompletions: statusLineCompletions,
     handler: async (args, ctx) => {
       try { await command(args, ctx); }

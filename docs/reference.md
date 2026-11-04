@@ -24,7 +24,7 @@ Statistics rows persist as custom session entries and never enter model context.
 | --- | --- |
 | `/continue` | Continues an interrupted task using a hidden cue. Ctrl+Alt+C is the equivalent editor shortcut. |
 | `/auto-name [option]` | Configures automatic first-message thread names. See the [automatic naming reference](auto-name.md). |
-| `/status-line [option]` | Opens the status line editor or changes footer settings. See the [status line reference](status-line.md). |
+| `/statusline [option]` | Opens the status line editor or changes footer settings. See the [status line reference](status-line.md). |
 | `/goal [objective]` | Shows the current goal, or sets an objective and starts work. See the [goal reference](goals.md) for lifecycle and budget commands. |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
 | `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |

@@ -106,7 +106,7 @@ async function harness(configContent?: string, sharedConfigPath?: string) {
   const emit = async (event: string, ctx: any, payload: any = {}) => {
     for (const handler of handlers.get(event) ?? []) await handler({ type: event, ...payload }, ctx);
   };
-  const run = (args: string, ctx: any) => commands.get('status-line').handler(args, ctx);
+  const run = (args: string, ctx: any) => commands.get('statusline').handler(args, ctx);
   const saved = async () => JSON.parse(await readFile(configPath, 'utf8'));
   const cleanup = () => rm(dir, { recursive: true, force: true });
   return { emit, run, saved, cleanup, configPath, dir, commands,
@@ -121,8 +121,8 @@ describe('status line extension', () => {
       await h.emit('session_start', c.ctx, { reason: 'startup' });
       expect(c.footers).toHaveLength(1);
       const lines = c.render();
-      expect(lines[0]).toBe('● ready · test-model · medium · /tmp/project · ⎇ main · “My session”');
-      expect(lines[1]).toBe('ctx 90% left of 10k · ↑1.0k ↓200 · $0.010');
+      expect(lines[0]).toBe('● ready  test-model  medium  /tmp/project  ⎇ main  “My session”');
+      expect(lines[1]).toBe('ctx 90% left of 10k  ↑1.0k ↓200  $0.010');
       h.setThinking('high');
       expect(c.render()[0]).toContain('high');
       expect(c.mounted().render(200)[0]).toContain('\x1b[');
@@ -151,7 +151,7 @@ describe('status line extension', () => {
       await h.emit('session_start', c.ctx, { reason: 'startup' });
       c.data.statuses.set('zz-plugin', '\x1b[35mbuild\nok\x1b[0m');
       c.data.statuses.set('aa-plugin', 'lint');
-      expect(c.render().at(-1)).toContain('lint · build ok');
+      expect(c.render().at(-1)).toContain('lint  build ok');
 
       const opened = h.run('', c.ctx);
       const editor = await until(c.editor);
@@ -197,7 +197,7 @@ describe('status line extension', () => {
       expect(c.notices.at(-1)).toEqual([expect.stringContaining('Unknown option'), 'error']);
       await h.run('reset', c.ctx);
       expect(await h.saved()).toEqual(expect.objectContaining({ enabled: true, colorMode: 'colorful' }));
-      expect(h.commands.get('status-line').getArgumentCompletions('o').map((item: any) => item.value)).toEqual(['on', 'off']);
+      expect(h.commands.get('statusline').getArgumentCompletions('o').map((item: any) => item.value)).toEqual(['on', 'off']);
     } finally { await h.cleanup(); }
   });
 
@@ -208,7 +208,7 @@ describe('status line extension', () => {
       await h.emit('session_start', c.ctx, { reason: 'startup' });
       for (const args of ['color', 'colour', '  COLOR  ']) {
         await h.run(args, c.ctx);
-        expect(c.notices.at(-1)).toEqual([expect.stringMatching(/Choose a colour mode\. Use \/status-line colou?r <colorful\|theme\|mono>/), 'error']);
+        expect(c.notices.at(-1)).toEqual([expect.stringMatching(/Choose a colour mode\. Use \/statusline colou?r <colorful\|theme\|mono>/), 'error']);
       }
       expect(c.editor()).toBeUndefined();
       await expect(readFile(h.configPath, 'utf8')).rejects.toThrow();
@@ -225,7 +225,7 @@ describe('status line extension', () => {
   test('argument completions offer direct commands and colour modes after color or colour', async () => {
     const h = await harness();
     try {
-      const complete = (prefix: string) => h.commands.get('status-line').getArgumentCompletions(prefix)?.map((item: any) => item.value) ?? null;
+      const complete = (prefix: string) => h.commands.get('statusline').getArgumentCompletions(prefix)?.map((item: any) => item.value) ?? null;
       expect(complete('')).toEqual(['on', 'off', 'reset', 'status', 'colorful', 'theme', 'mono', 'color', 'colour']);
       expect(complete('col')).toEqual(['colorful', 'color', 'colour']);
       expect(complete('color ')).toEqual(['color colorful', 'color theme', 'color mono']);
@@ -389,7 +389,7 @@ describe('status line extension', () => {
       await opened;
       const first = c.render(80)[0];
       expect(first).toStartWith('● ready');
-      expect(first).toEndWith('plugin · test-model');
+      expect(first).toEndWith('plugin  test-model');
       expect(first.length).toBe(80);
       reopened = await harness(JSON.stringify(await h.saved()));
       const next = context();

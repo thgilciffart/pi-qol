@@ -32,6 +32,9 @@ describe('status line settings', () => {
       [{ items: {} }, /"items" must be an array/],
       [{ items: [{ id: 'bogus' }] }, /not a built-in module/],
       [{ items: [{ id: 'extension:' }] }, /not a built-in module/],
+      [{ items: [{ id: 'separator:0' }] }, /not a built-in module/],
+      [{ items: [{ id: 'separator:abc' }] }, /not a built-in module/],
+      [{ items: [{ id: 'separator:1' }, { id: 'separator:1' }] }, /more than once/],
       [{ items: [{ id: 'model' }, { id: 'model' }] }, /more than once/],
       [{ items: [{ id: 'model', row: 3 }] }, /row must be 1 or 2/],
       [{ items: [{ id: 'model', side: 'center' }] }, /side must be "left" or "right"/],
@@ -122,6 +125,21 @@ describe('status line settings', () => {
       expect(await loadConfig(path)).toEqual({ status: 'ok', config });
       expect(resolveItems(config, ['new']).slice(0, 4)).toEqual(config.items.slice(0, 4));
       expect(resolveItems(config, ['new']).at(-1)?.side ?? 'left').toBe('left');
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
+  test('optional separator items round-trip without being added to default or older settings', async () => {
+    const dir = await tempDir();
+    try {
+      const config = defaultConfig();
+      expect(config.items.some(item => item.id.startsWith('separator:'))).toBe(false);
+      expect(validateConfig(config)).toEqual(config);
+      config.items.splice(1, 0, { id: 'separator:1', enabled: true, row: 1 });
+      config.items.push({ id: 'separator:2', enabled: false, row: 2, side: 'right' });
+      const path = join(dir, 'status-line.json');
+      await saveConfig(path, config);
+      expect(await loadConfig(path)).toEqual({ status: 'ok', config });
+      expect(resolveItems(config, ['plugin']).filter(item => item.id.startsWith('separator:'))).toHaveLength(2);
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });

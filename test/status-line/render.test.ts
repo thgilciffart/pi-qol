@@ -34,8 +34,8 @@ describe('renderStatusLine', () => {
     const { theme } = fakeTheme();
     const lines = renderStatusLine(snapshot(), config(), theme, 200).map(strip);
     expect(lines).toEqual([
-      '● ready · gpt-test · high · ~/work/app · ⎇ main · “Fix footer”',
-      'ctx 75% left of 200k · ↑12k ↓3.4k · cache R50k W2.0k 80% hit · $0.250',
+      '● ready  gpt-test  high  ~/work/app  ⎇ main  “Fix footer”',
+      'ctx 75% left of 200k  ↑12k ↓3.4k  cache R50k W2.0k 80% hit  $0.250',
     ]);
   });
 
@@ -119,7 +119,7 @@ describe('renderStatusLine', () => {
       model: { id: 'plain', provider: 'x', reasoning: false }, gitBranch: null, sessionName: undefined,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }, context: undefined,
     });
-    expect(renderStatusLine(empty, config(), theme, 200).map(strip)).toEqual(['● ready · plain · ~/work/app']);
+    expect(renderStatusLine(empty, config(), theme, 200).map(strip)).toEqual(['● ready  plain  ~/work/app']);
     const cfg = config();
     cfg.items = cfg.items.map(item => ({ ...item, enabled: item.id === 'model' }));
     expect(renderStatusLine(snapshot(), cfg, theme, 200).map(strip)).toEqual(['gpt-test']);
@@ -158,7 +158,7 @@ describe('renderStatusLine', () => {
     const data = snapshot({ extensionStatuses: new Map([['l1', 'L1'], ['l2', 'L2'], ['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']]) });
     const lines = renderStatusLine(data, cfg, fakeTheme().theme, 40);
     expect(lines).toEqual([
-      'L1 · L2' + ' '.repeat(26) + 'R1 · R2',
+      'L1  L2' + ' '.repeat(28) + 'R1  R2',
       ' '.repeat(38) + 'R3',
     ]);
     expect(lines.map(visibleWidth)).toEqual([40, 40]);
@@ -215,8 +215,8 @@ describe('renderStatusLine', () => {
     cfg.items.push({ id: 'extension:mcp', row: 1, side: 'right', enabled: true });
     const data = snapshot({ cwd: '/home/me/work/application', extensionStatuses: new Map([['mcp', 'MCP 界界 3 servers']]) });
     const lines = renderStatusLine(data, cfg, fakeTheme().theme, 60);
-    expect(lines[0]).toEndWith('gpt-test · MCP 界界 3 servers');
-    expect(lines[1]).toContain('~/work/application · ⎇ main · “Fix footer”');
+    expect(lines[0]).toEndWith('gpt-test  MCP 界界 3 servers');
+    expect(lines[1]).toContain('~/work/application  ⎇ main  “Fix footer”');
     expect(lines[1]).not.toContain('+1');
 
     cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
@@ -228,8 +228,39 @@ describe('renderStatusLine', () => {
     }
     const rightLines = renderStatusLine(snapshot({ extensionStatuses: statuses }), cfg, fakeTheme().theme, 60);
     expect(rightLines).toHaveLength(2);
-    expect(rightLines[1]).toEndWith('3'.repeat(15) + ' · ' + '4'.repeat(15) + ' · ' + '5'.repeat(15));
+    expect(rightLines[1]).toEndWith('3'.repeat(15) + '  ' + '4'.repeat(15) + '  ' + '5'.repeat(15));
     expect(rightLines[1]).not.toContain('+1');
     for (const line of [...lines, ...rightLines]) expect(visibleWidth(line)).toBeLessThanOrEqual(60);
+  });
+
+  test('renders separators only where explicitly placed and omits them at side and line boundaries', () => {
+    const cfg = config({ colorMode: 'mono', showNewExtensionStatuses: false });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    cfg.items.push(
+      { id: 'separator:1', row: 1, enabled: true },
+      { id: 'extension:a', row: 1, enabled: true },
+      { id: 'separator:2', row: 1, enabled: true },
+      { id: 'extension:absent', row: 1, enabled: true },
+      { id: 'extension:b', row: 1, enabled: true },
+      { id: 'separator:3', row: 1, enabled: true },
+      { id: 'extension:c', row: 1, enabled: true },
+      { id: 'separator:4', row: 1, enabled: true },
+      { id: 'separator:5', row: 2, enabled: true, side: 'right' },
+    );
+    const data = snapshot({ extensionStatuses: new Map([['a', 'AAA'], ['b', 'BBB'], ['c', 'CCC']]) });
+    expect(renderStatusLine(data, cfg, fakeTheme().theme, 40)).toEqual(['AAA  ·  BBB  ·  CCC']);
+    expect(renderStatusLine(data, cfg, fakeTheme().theme, 11)).toEqual(['AAA  ·  BBB', 'CCC']);
+    for (let width = 1; width <= 60; width++) {
+      for (const mode of ['colorful', 'theme', 'mono'] as const) {
+        cfg.colorMode = mode;
+        for (const line of renderStatusLine(data, cfg, fakeTheme().theme, width)) {
+          expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+          expect(strip(line).trim()).not.toMatch(/^·|·$/);
+        }
+      }
+    }
+    cfg.colorMode = 'mono';
+    cfg.items.find(item => item.id === 'separator:2')!.enabled = false;
+    expect(renderStatusLine(data, cfg, fakeTheme().theme, 40)).toEqual(['AAA  BBB  ·  CCC']);
   });
 });

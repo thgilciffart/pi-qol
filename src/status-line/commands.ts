@@ -1,7 +1,7 @@
 import { completions } from '../shared.ts';
 import { COLOR_MODES, type ColorMode } from './config.ts';
 
-/** What `/status-line <args>` asks for. */
+/** What `/statusline <args>` asks for. */
 export type StatusLineAction =
   | { kind: 'editor' }
   | { kind: 'reset' }
@@ -27,11 +27,11 @@ export function parseStatusLineArgs(args: string): StatusLineAction {
   const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const [first, second] = words;
   if (first !== undefined && COLOR_PREFIXES.has(first)) {
-    if (words.length > 2) throw new Error(`Too many arguments. Use /status-line ${first} <${COLOR_MODES.join('|')}>.`);
-    if (second === undefined) throw new Error(`Choose a colour mode. Use /status-line ${first} <${COLOR_MODES.join('|')}>.`);
+    if (words.length > 2) throw new Error(`Too many arguments. Use /statusline ${first} <${COLOR_MODES.join('|')}>.`);
+    if (second === undefined) throw new Error(`Choose a colour mode. Use /statusline ${first} <${COLOR_MODES.join('|')}>.`);
     return colorAction(second);
   }
-  if (words.length > 1) throw new Error('Too many arguments. Use /status-line [on|off|reset|status|colorful|theme|mono].');
+  if (words.length > 1) throw new Error('Too many arguments. Use /statusline [on|off|reset|status|colorful|theme|mono].');
   switch (first) {
     case undefined: return { kind: 'editor' };
     case 'reset': return { kind: 'reset' };

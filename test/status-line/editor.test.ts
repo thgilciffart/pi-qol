@@ -37,7 +37,7 @@ describe('status line editor', () => {
     const h = mount();
     const text = h.text();
     expect(text).toContain('Preview (live)');
-    expect(text).toContain('● ready · gpt-test');
+    expect(text).toContain('● ready  gpt-test');
     expect(text).toContain('Custom footer');
     expect(text).toContain('Row 1');
     expect(text).toContain('[x] Ready / working');
@@ -114,7 +114,7 @@ describe('status line editor', () => {
     expect(h.text()).toContain('Row 1 · Right');
     expect(h.text()).toContain('❯ [x] Model');
     h.press(']'); // thinking now appears before model on the right
-    expect(h.text().split('\n').find(line => line.includes('● ready'))?.trimEnd()).toEndWith('high · gpt-test');
+    expect(h.text().split('\n').find(line => line.includes('● ready'))?.trimEnd()).toEndWith('high  gpt-test');
     h.press(LEFT);
     expect(h.text()).toContain('❯ [x] Model');
     h.press(RIGHT, '2');
@@ -224,6 +224,33 @@ describe('status line editor', () => {
     expect(h.renders()).toBe(0);
     h.press(DOWN);
     expect(h.renders()).toBe(1);
+  });
+
+  test('adds independent separator items and lets them be reordered, placed, toggled, and removed', () => {
+    const h = mount();
+    for (let i = 0; i < FIRST_ITEM + 1; i++) h.press(DOWN); // model
+    h.press('s');
+    expect(h.text()).toContain('❯ [x] Separator ·');
+    expect(h.text()).toContain('gpt-test  ·  high');
+    h.press(']'); // after effort
+    expect(h.text()).toContain('gpt-test  high  ·  ~/work/app');
+    h.press('s', RIGHT, '2', ' '); // second separator on row 2 right, disabled
+    h.press(ENTER);
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.items.filter(item => item.id.startsWith('separator:'))).toEqual([
+      { id: 'separator:1', enabled: true, row: 1 },
+      { id: 'separator:2', enabled: false, row: 2, side: 'right' },
+    ]);
+    const reopened = mount(saved);
+    reopened.press('\x1b[F', '\x1b[3~'); // delete second separator
+    reopened.press('\x1b[H', DOWN, DOWN, DOWN, '\x1b[3~', ENTER); // built-in state cannot be removed
+    const result = reopened.result() as StatusLineConfig;
+    expect(result.items.some(item => item.id === 'separator:2')).toBe(false);
+    expect(result.items.some(item => item.id === 'separator:1')).toBe(true);
+    expect(result.items.some(item => item.id === 'state')).toBe(true);
+    const cancelled = mount();
+    cancelled.press('s', ESC, ESC);
+    expect(cancelled.result()).toBeUndefined();
   });
 
   test('the new-status policy immediately updates unlisted keys already present in the editor', () => {

@@ -1,7 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { decodeKittyPrintable, Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type TUI } from '@earendil-works/pi-tui';
 import {
-  BUILTIN_LABELS, COLOR_MODES, cloneConfig, defaultConfig, extensionKey, resolveItems,
+  BUILTIN_LABELS, COLOR_MODES, MAX_ITEMS, cloneConfig, defaultConfig, extensionKey, isSeparator, resolveItems,
   type BuiltinModuleId, type Side, type StatusLineConfig, type StatusLineItem,
 } from './config.ts';
 import { renderStatusLine, sampleSnapshot, sanitizeInline, type StatusSnapshot } from './render.ts';
@@ -23,7 +23,7 @@ const COLOR_LABELS: Record<StatusLineConfig['colorMode'], string> = {
 };
 
 export const EDITOR_HINTS = [
-  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1/2 row', 'c colour', 'p preview',
+  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1/2 row', 's add separator', 'Del remove separator', 'c colour', 'p preview',
   'r reset', 'Enter/Ctrl+S save', 'Esc cancel',
 ];
 
@@ -143,6 +143,31 @@ export class StatusLineEditor implements Component {
     this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
   }
 
+  private addSeparator(): void {
+    if (this.draft.items.length >= MAX_ITEMS) {
+      this.say(`The status line supports at most ${MAX_ITEMS} items.`, 'warning');
+      return;
+    }
+    const ids = new Set(this.draft.items.map(item => item.id));
+    let number = 1;
+    while (ids.has(`separator:${number}`)) number++;
+    const index = Math.max(0, this.cursor - SETTINGS.length);
+    const selected = this.draft.items[index];
+    const item: StatusLineItem = { id: `separator:${number}`, enabled: true, row: selected?.row ?? 1,
+      ...(selected?.side ? { side: selected.side } : {}) };
+    this.draft.items.splice(index + 1, 0, item);
+    this.draft.items = sortByPlacement(this.draft.items);
+    this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
+  }
+
+  private removeSeparator(): void {
+    const index = this.cursor - SETTINGS.length;
+    const item = this.draft.items[index];
+    if (!item || !isSeparator(item.id)) return;
+    this.draft.items.splice(index, 1);
+    this.cursor = Math.min(this.cursor, this.rowCount - 1);
+  }
+
   handleInput(data: string): void {
     if (this.closed) return;
     this.refreshPresentKeys();
@@ -172,6 +197,8 @@ export class StatusLineEditor implements Component {
     else if (matchesKey(data, Key.right)) this.setSide('right');
     else if (printable === '1') this.setRow(1);
     else if (printable === '2') this.setRow(2);
+    else if (printable === 's') this.addSeparator();
+    else if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) this.removeSeparator();
     else if (matchesKey(data, Key.space) || data === ' ') this.toggle();
     else if (printable === 'c') this.cycleColor();
     else if (printable === 'p') this.preview = this.preview === 'live' ? 'sample' : 'live';
@@ -201,6 +228,7 @@ export class StatusLineEditor implements Component {
   }
 
   private itemLabel(item: StatusLineItem, statuses: ReadonlyMap<string, string>): { label: string; detail: string } {
+    if (isSeparator(item.id)) return { label: 'Separator ·', detail: '' };
     const key = extensionKey(item.id);
     if (key === undefined) return { label: BUILTIN_LABELS[item.id as BuiltinModuleId], detail: '' };
     const text = statuses.get(key);

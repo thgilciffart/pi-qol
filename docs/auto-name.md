@@ -39,7 +39,7 @@ The prompt accepts 1 to 8,000 characters. The prompt editor preserves multiple l
 
 ## Persistence and lifecycle
 
-Settings are saved to `pi-qol-auto-name.json` in Pi's agent directory, normally `~/.pi/agent`. They apply across sessions and survive reloads. Configuration changes apply to future naming requests and cancel pending requests.
+Settings are saved to `pi-qol/auto-name.json` in Pi's agent directory, normally `~/.pi/agent`. They apply across sessions and survive reloads. Configuration changes apply to future naming requests and cancel pending requests.
 
 Generated names use Pi's session metadata and appear in the thread picker. Ephemeral thread names remain in memory. Existing conversations, resumed sessions, and forks with conversation history are not renamed automatically. Enabling naming after a thread's first message does not rename it; `/auto-name now` handles existing threads.
 

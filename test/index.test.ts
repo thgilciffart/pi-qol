@@ -14,10 +14,10 @@ test('Pi loads the bundled extension and registers its commands, tools, and shor
   for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name', 'continue', 'status-line']) {
     expect(extension.commands.has(command)).toBe(true);
   }
-  for (const tool of ['get_goal', 'create_goal', 'update_goal']) expect(extension.tools.has(tool)).toBe(true);
+  for (const tool of ['get_goal', 'create_goal', 'update_goal', 'ask_user']) expect(extension.tools.has(tool)).toBe(true);
   for (const shortcut of ['ctrl+alt+c', 'alt+p', 'alt+,', 'alt+.']) expect(extension.shortcuts.has(shortcut)).toBe(true);
+  expect(extension.commands.has('ask-demo')).toBe(false);
   expect(extension.commands.has('agents')).toBe(false);
   expect(extension.tools.has('subagent')).toBe(false);
   expect(extension.shortcuts.has('ctrl+e')).toBe(false);
-
 });

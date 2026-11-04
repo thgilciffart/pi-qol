@@ -7,6 +7,7 @@ import threads from './src/threads.ts';
 import autoName from './src/auto-name.ts';
 import continueTurn from './src/continue.ts';
 import thinking from './src/thinking.ts';
+import askQuestions from './src/ask-questions/index.ts';
 import statusLine from './src/status-line/index.ts';
 
 export default function qol(pi: ExtensionAPI): void {
@@ -18,5 +19,6 @@ export default function qol(pi: ExtensionAPI): void {
   autoName(pi);
   continueTurn(pi);
   thinking(pi);
+  askQuestions(pi);
   statusLine(pi);
 }

@@ -82,7 +82,7 @@ interface NamingJob {
 }
 
 export default function autoName(pi: ExtensionAPI, options: { configPath?: string } = {}): void {
-  const configPath = options.configPath ?? join(getAgentDir(), 'pi-qol-auto-name.json');
+  const configPath = options.configPath ?? join(getAgentDir(), 'pi-qol', 'auto-name.json');
   let settings: AutoNameSettings = { ...DEFAULT_AUTO_NAME_SETTINGS };
   let settingsReady: Promise<void> | undefined;
   let sessionId: string | undefined;

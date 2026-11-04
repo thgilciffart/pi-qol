@@ -15,6 +15,7 @@
 | Thinking effort | [`src/thinking.ts`](../src/thinking.ts) | Uses Pi's supported levels for the current model. | Alt+, and Alt+. |
 | Status line | [`src/status-line/index.ts`](../src/status-line/index.ts) | Settings, command parsing, footer lifecycle, data snapshots, rendering, sanitization, and the editor have separate modules. | `/status-line` |
 | HTML export | [`src/export/index.ts`](../src/export/index.ts) | Target resolution and HTML transformation are separate from command orchestration. `native-export.ts` adapts Pi's exporter. Other modules handle the theme, session data, redaction, math, and printing. | `/better-export` |
+| Questionnaires | [`src/ask-questions/index.ts`](../src/ask-questions/index.ts) | `extension.ts` owns tool registration and background lifecycle. `questions.ts` and `schema.ts` define answers and validation. `fallback.ts` supports dialog-only modes. `ui/state.ts`, `ui/render.ts`, and `ui/ask-questionnaire.ts` separate answer operations, drawing, and input handling. | `ask_user` |
 
 [`src/shared.ts`](../src/shared.ts) contains small helpers used by several features: atomic JSON writes, error messages, command completions, model references, and conversation detection. Feature-specific state and validation stay in their own modules.
 
@@ -29,8 +30,9 @@
 | Response statistics | Input, output, cost, TTFT, duration, and token rate | `pi-qol-metrics` custom session entries |
 | Ephemeral return | The saved chat to return to from an empty private chat | `pi-qol-ephemeral-return` custom entries in memory |
 | Interrupted turns | Hidden request to continue an unfinished reply | `pi-qol-continue` custom messages |
-| Automatic names | Enabled state, model, effort, and naming prompt | `<agent directory>/pi-qol-auto-name.json` |
+| Automatic names | Enabled state, model, effort, and naming prompt | `<agent directory>/pi-qol/auto-name.json` |
 | Status line | Visibility, colour mode, module order, row, and side | `<agent directory>/pi-qol/status-line.json` |
+| Questionnaires | Completed or cancelled background answers delivered to the agent | `ask_user:answers` custom messages |
 
 Session entries retain their existing names and formats. Restoring a goal pauses it until fresh user direction. Ephemeral chats keep their entries in memory. Exports create files without changing the session history.
 

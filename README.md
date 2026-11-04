@@ -1,68 +1,84 @@
 # pi-qol
 
-A quality of life extension for [Pi](https://pi.dev). It adds automatic thread names, persistent goals, response statistics, thread deletion, ephemeral chats, and HTML exports from `pi-better-export`.
+Quality of life tools for [Pi](https://pi.dev), bundled in one extension.
+
+## Included features
+
+- [Answer interactive questions](#answer-questions) with single-choice, multiple-choice, and typed responses.
+- [Name new threads automatically](#name-threads) with a configurable model, effort, and prompt.
+- [Work toward a persistent goal](#work-toward-a-goal) across turns, with an optional token budget.
+- [See response statistics](docs/reference.md#response-statistics) for input and output tokens, tokens per second, time to first token, and cost in USD.
+- [Customise the status line](#customise-the-status-line) with colour and your choice of modules, including status text from other plugins.
+- [Continue interrupted work](#continue-interrupted-work) with `/continue` or Ctrl+Alt+C.
+- Cycle supported thinking levels with `Alt+,` and `Alt+.`.
+- [Start ephemeral chats](#start-an-ephemeral-chat) that keep session history in memory.
+- [Delete threads](#delete-threads) individually or through a searchable picker with date and project groups.
+- [Export chats as HTML](#export-a-chat) with offline LaTeX, printing, and a redaction preview for sharing.
 
 ## Install
 
 Requires Node.js 22.19 or later and Pi 1.3.x.
 
+Before installing, remove any standalone packages that pi-qol replaces.
+
+Run only the removal commands that match your installations:
+
+```sh
+pi remove git:github.com/thgilciffart/pi-ask-questions
+pi remove npm:@thgilciffart/pi-ephemeral
+pi remove npm:pi-better-export
+```
+
+If you installed `pi-ask-questions` from npm, use `pi remove npm:pi-ask-questions` instead. For extensions loaded through a local path or settings file, remove those entries.
+
+Install pi-qol:
+
 ```sh
 pi install git:github.com/thgilciffart/pi-qol
 ```
 
-Run `/reload` in an open Pi session. Remove standalone installations of `pi-ephemeral` and `pi-better-export` to avoid command conflicts.
+Run `/reload` in an open Pi session.
 
-## Install from a checkout
+## Answer questions
 
-Development checks also require Bun.
+The bundled `ask_user` tool from `pi-ask-questions` supports single-choice, multiple-choice, and typed answers.
 
-1. Install dependencies in this directory.
+Background mode lets Pi continue independent work while you answer. Urgent mode waits for your response. Use Tab to switch questions, Space or number keys to select options, and Enter to confirm. Press Escape twice or Ctrl+C to cancel.
 
-   ```sh
-   npm ci
-   ```
+See the [questionnaire reference](docs/questions.md) for modes, controls, and structured results.
 
-2. Remove the standalone plugins if you installed them through Pi.
+## Name threads
 
-   ```sh
-   pi remove npm:@thgilciffart/pi-ephemeral
-   pi remove npm:pi-better-export
-   ```
+Send the first message in a new chat. Pi generates a short thread name in the background using the current model with reasoning off. Existing threads and manual names stay unchanged.
 
-   If you loaded either plugin through a local path or a settings file, remove that entry instead.
-
-3. Install this directory as a Pi package.
-
-   ```sh
-   pi install .
-   ```
-
-4. Run `/reload` in an open Pi session.
-
-To try the extension without installing it, run `pi -e ./index.ts` from this directory.
-
-## Name new threads automatically
-
-Send the first message in a new chat. Pi generates a short thread name in the background using the current chat model, reasoning off, and a built-in naming prompt. Existing threads and manual names stay unchanged.
-
-Run `/auto-name` to configure the model, effort, and prompt. The model picker supports search and Tab to switch All/Scoped. Escape from a submenu returns to settings. You can also use direct commands:
+Run `/auto-name` to configure the model, effort, and prompt. The model picker supports search. Tab switches between all and scoped models. Direct commands include:
 
 ```text
 /auto-name model provider/model-id
 /auto-name effort low
 /auto-name prompt
 /auto-name off
+/auto-name now
 ```
 
-`/auto-name prompt` opens the prompt editor. `/auto-name prompt default` restores the built-in prompt. `/auto-name now` generates a name for the current thread from its first message. Settings apply across chats.
+Settings apply across chats. See the [automatic naming reference](docs/auto-name.md) for defaults and prompt editing.
 
-See the [automatic naming reference](docs/auto-name.md) for all options and defaults.
+## Work toward a goal
 
-## Read response statistics
+Use `/goal` to keep Pi working toward a verifiable outcome across turns:
 
-Send a prompt. Each final assistant reply has a row with separate input and output token counts, tokens per second, TTFT, and cost in USD. Tool-call messages have no statistics row. Statistics appear only in the transcript.
+```text
+/goal Make the checkout tests pass without changing the public API
+/goal --tokens 50000 Reduce benchmark latency below 120 ms and verify correctness
+```
 
-See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
+Pi starts work immediately. The editor shows the goal's status, elapsed time, and consumed tokens or token budget. The agent marks the goal complete after verifying the outcome.
+
+Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Use `/goal edit` to revise the objective. Escape pauses an interrupted goal. Ordinary messages steer an active goal without pausing it.
+
+Goals survive compaction and session restarts. Reopened sessions restore goals paused. Give directions to continue or run `/goal resume`.
+
+See the [goal reference](docs/goals.md) for commands, budget accounting, and continuation guards.
 
 ## Customise the status line
 
@@ -74,86 +90,46 @@ Use `/status-line off` to restore Pi's built-in footer, or `/status-line on` to 
 
 See the [status line reference](docs/status-line.md) for controls, modules, and settings.
 
-## Continue an interrupted turn
+## Continue interrupted work
 
-If you accidentally press Escape, press **Ctrl+Alt+C** or run `/continue` to pick up the unfinished task. This starts a new model request with a hidden continuation cue, without adding a visible user message or clearing your editor draft.
+Press Ctrl+Alt+C or run `/continue` to resume an unfinished task after Escape. Pi starts a new model request using the existing conversation. Your editor draft stays intact.
 
-It does nothing while Pi is busy or input is queued. The cancelled stream itself cannot be reconnected. For paused goals, `/goal resume` remains the goal control.
-
-## Work toward a goal
-
-Use `/goal` to keep Pi working toward a verifiable outcome across turns:
-
-```text
-/goal Make the checkout tests pass without changing the public API
-/goal --tokens 50000 Reduce benchmark latency below 120 ms and verify correctness
-```
-
-Pi starts work immediately and continues after completed turns while the goal is active. The top right of the editor shows **Pursuing goal** with elapsed time and consumed tokens, or a compact token budget. Token consumption remains visible when paused or stopped. The agent marks the goal complete after verifying the outcome.
-
-Run `/goal` to see the objective and usage. Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Escape pauses an interrupted goal. Use `/goal edit <objective>` to revise it, or `/goal edit` to open an editor.
-
-Ordinary messages steer the goal without pausing it. The agent pauses only when you clearly intend to stop or take a break. New guidance about continuing the work, such as "you can use subagents," lets it resume a paused goal without asking for confirmation. You can also use `/goal resume`.
-
-Goals persist with the session and survive compaction. Reopened sessions restore goals paused. Give directions to continue or run `/goal resume`. Ephemeral chats keep their goals in memory.
-
-Goal turns let Pi become idle between continuations so compaction extensions can run their threshold checks. The goal waits for automatic compaction to finish before continuing.
-
-See the [goal reference and Codex sources](docs/goals.md) for budget accounting, continuation guards, and differences from Codex.
-
-## Delete threads
-
-Deletion permanently removes session files. There is no undo. Close a thread in other Pi processes before deleting its file.
-
-To delete the current thread, run `/delete` and accept the confirmation. Pi starts a new chat before the extension removes the old file. Cancelling the session change preserves the old file.
-
-To delete several threads:
-
-1. Run `/delete-threads` to open the thread picker.
-2. Type to search. Press Tab to switch between the current project and all projects.
-3. Press Space or Enter to select a thread and move to the next row. Press Ctrl+A to select all matching threads.
-4. Press Ctrl+D to review the deletion confirmation.
-5. Press Enter to confirm, or N to return to the list.
-
-Press Escape to exit without deleting any unconfirmed selection. If no threads are selected, Ctrl+D asks to delete the highlighted thread. The current thread is excluded from the picker.
-
-Press Ctrl+G to cycle between ungrouped, date, and project views. Date groups use each thread's last-modified date in your local timezone. Project groups use the full project path.
-
-Each thread shows its last-modified date before its title, using the system locale and timezone.
-
-The picker stays open after deletion. Use `/delete-threads search text` to start with a search.
-
-## Cycle thinking effort
-
-Press Alt+, for the previous thinking level or Alt+. for the next. Both wrap around and skip levels the current model does not support. Changes apply to the current session.
+The command does nothing while Pi is busy or input is queued. Use `/goal resume` for a paused goal.
 
 ## Start an ephemeral chat
 
-Press Alt+P or run `/ephemeral` to open a private chat immediately. The new chat keeps its history in memory and shows an ephemeral badge in the footer. The previous saved chat remains on disk.
+Press Alt+P or run `/ephemeral` to start a chat with in-memory history. A footer badge marks the ephemeral session. The previous saved chat remains on disk.
 
-Press Alt+P again before sending a message to return to the previous saved chat. Once the private chat contains messages, the shortcut keeps it open. It never saves private history or discards a conversation you have started.
+Press Alt+P again before sending a message to return to the saved chat. After the ephemeral chat contains messages, the shortcut keeps it open.
 
-Pi reserves Alt+P for previous-model cycling. To free it for ephemeral chats, set the following in `~/.pi/agent/keybindings.json`, then run `/reload`:
+Pi reserves Alt+P for previous-model cycling. To free the shortcut, add this entry to `~/.pi/agent/keybindings.json`, then run `/reload`:
 
 ```json
 {
-  "app.model.cycleBackward": "shift+ctrl+p"
+	"app.model.cycleBackward": "shift+ctrl+p"
 }
 ```
 
-To send an initial prompt into the new chat:
+Use `/ephemeral explain this repository` to include an initial prompt. Ephemeral mode controls session history. Exports and files created by tools still write to disk.
 
-```text
-/ephemeral explain this repository
-```
+## Delete threads
 
-Ephemeral mode controls Pi's session file. Exported HTML and files that tools create still write to disk.
+Deletion permanently removes session files. There is no undo. Close a thread in other Pi processes before deleting it.
+
+Run `/delete` to delete the current thread after confirmation. To delete several threads:
+
+1. Run `/delete-threads` and type to search.
+2. Press Space or Enter to select threads.
+3. Press Ctrl+D to review the selection.
+4. Press Enter to confirm, or N to return to the list.
+
+Tab switches between the current project and all projects. Ctrl+G cycles date and project grouping. Ctrl+A selects all matching threads. Escape exits without deleting unconfirmed selections.
+
+The picker excludes the current thread and stays open after deletion. See the [thread picker reference](docs/reference.md#thread-picker-keys) for all controls.
 
 ## Export a chat
 
-Run `/better-export` to save the current session as HTML. Pi asks before replacing a file and offers to open the result in your browser.
-
-You can export during a running turn. The export captures recorded messages without waiting for or interrupting the agent. A reply still streaming is included only after Pi records it.
+Run `/better-export` to save the session as HTML. Pi asks before replacing a file and offers to open the export in your browser.
 
 ```text
 /better-export
@@ -161,13 +137,15 @@ You can export during a running turn. The export captures recorded messages with
 /better-export --share --redact-text "Acme Internal" sharing.html
 ```
 
-The export includes the current theme, offline LaTeX, equation copying, and a **Print / PDF** button. The default export retains the session tree, search, filters, and code highlighting.
+Exports include the current theme, offline LaTeX, equation copying, search, code highlighting, and a Print / PDF button. You can export during a running turn. The file captures recorded messages at export time.
 
 Use `--share` to export the active conversation with a redaction preview. Review the HTML before sharing it. Detection uses text patterns and does not scan images.
 
-Pi handles its built-in `/export` before extension commands. Use `/better-export` for this exporter.
+See the [export reference](docs/reference.md#export-flags) for flags and limits. Pi handles its built-in `/export` before extension commands, so this exporter uses `/better-export`.
 
-## Check changes
+## Develop from a checkout
+
+Development requires Bun in addition to Node.js and Pi.
 
 ```sh
 npm ci
@@ -176,10 +154,12 @@ npm test
 npm pack --dry-run
 ```
 
-The tests cover automatic naming, interrupted-turn continuation, goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
+The tests use temporary session files and local model fixtures. They do not delete saved chats or make paid model requests.
+
+Run `pi install .` to install this checkout, then `/reload` in an open session. To try it without installing, run `pi -e ./index.ts`.
 
 See the [codebase map](docs/architecture.md) for feature boundaries, persistence, and tests.
 
-See [Publish to npm](docs/publishing.md) for release commands and Pi package discovery.
+See [Publish to npm](docs/publishing.md) for release commands and package discovery.
 
 [MIT license](LICENSE). Embedded KaTeX assets retain their upstream license notices.

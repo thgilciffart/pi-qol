@@ -85,4 +85,4 @@ Ephemeral mode changes private `SessionManager` fields because the new-session A
 
 HTML export uses Pi's internal exporter and theme helpers. An unsupported HTML template produces an error before the exporter replaces the destination file. Custom tools use Pi's fallback HTML rendering.
 
-The combined package owns the `/ephemeral` and `/better-export` commands. Loading their standalone plugins at the same time can cause command conflicts.
+The combined package owns the `ask_user` tool and the `/ephemeral` and `/better-export` commands. Loading their standalone plugins at the same time can cause conflicts.

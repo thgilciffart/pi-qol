@@ -369,7 +369,7 @@ describe('status line extension', () => {
     } finally { await h.cleanup(); }
   });
 
-  test('editor placement and ordering of external statuses survive a fresh extension load', async () => {
+  test('editor placement, ordering and colours of external statuses survive a fresh extension load', async () => {
     const config = defaultConfig();
     config.items = config.items.map(item => ({ ...item, enabled: item.id === 'model' || item.id === 'state',
       ...(item.id === 'model' ? { side: 'right' as const } : {}) }));
@@ -385,17 +385,21 @@ describe('status line extension', () => {
       editor.handleInput('\x1b[C'); // right
       editor.handleInput('1'); // row 1
       editor.handleInput('['); // before the model
+      editor.handleInput('t'); // red
       editor.handleInput('\r');
       await opened;
       const first = c.render(80)[0];
       expect(first).toStartWith('● ready');
       expect(first).toEndWith('plugin  test-model');
       expect(first.length).toBe(80);
+      expect(c.mounted().render(80)[0]).toContain('\x1b[31mplugin\x1b[0m');
+      expect((await h.saved()).items.find((item: any) => item.id === 'extension:other-plugin').color).toBe('red');
       reopened = await harness(JSON.stringify(await h.saved()));
       const next = context();
       next.data.statuses.set('other-plugin', 'plugin');
       await reopened.emit('session_start', next.ctx);
       expect(next.render(80)).toEqual(c.render(80));
+      expect(next.mounted().render(80)[0]).toContain('\x1b[31mplugin\x1b[0m');
       next.data.statuses.clear();
       expect(next.render(80)[0]).toEndWith('test-model');
       next.data.statuses.set('other-plugin', 'plugin');

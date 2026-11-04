@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  BUILTIN_MODULES, defaultConfig, loadConfig, resolveItems, saveConfig, validateConfig,
+  BUILTIN_MODULES, EXTERNAL_COLORS, defaultConfig, loadConfig, resolveItems, saveConfig, validateConfig,
 } from '../../src/status-line/config.ts';
 
 async function tempDir(): Promise<string> {
@@ -43,6 +43,11 @@ describe('status line settings', () => {
       [{ items: [{ id: 'model', side: 'center' }] }, /side must be "left" or "right"/],
       [{ items: [{ id: 'model', side: null }] }, /side must be "left" or "right"/],
       [{ items: [{ id: 'model', enabled: 1 }] }, /enabled must be true or false/],
+      [{ items: [{ id: 'model', color: 'red' }] }, /only supported for external modules/],
+      [{ items: [{ id: 'separator:1', color: 'red' }] }, /only supported for external modules/],
+      [{ items: [{ id: 'extension:test', color: null }] }, /color must be one of/],
+      [{ items: [{ id: 'extension:test', color: 'neon' }] }, /color must be one of/],
+      [{ items: [{ id: 'extension:test', color: 'toString' }] }, /color must be one of/],
     ];
     for (const [value, message] of cases) expect(() => validateConfig(value)).toThrow(message);
   });
@@ -52,6 +57,23 @@ describe('status line settings', () => {
     expect(() => validateConfig({ items })).toThrow(/including built-in modules/);
     const config = validateConfig({ items: items.slice(0, 190) });
     expect(validateConfig(config)).toEqual(config);
+  });
+
+  test('saves external colour choices and retains them when a status disappears or returns', async () => {
+    const dir = await tempDir();
+    try {
+      const config = defaultConfig();
+      for (const color of Object.keys(EXTERNAL_COLORS) as (keyof typeof EXTERNAL_COLORS)[]) {
+        config.items.push({ id: `extension:${color}`, row: 3, side: 'right', enabled: false, color });
+      }
+      const path = join(dir, 'status-line.json');
+      await saveConfig(path, config);
+      const loaded = await loadConfig(path);
+      expect(loaded).toEqual({ status: 'ok', config });
+      expect(resolveItems(loaded.config, [])).toEqual(config.items);
+      expect(resolveItems(loaded.config, ['red', 'new']).slice(0, config.items.length)).toEqual(config.items);
+      expect(resolveItems(loaded.config, ['new']).at(-1)?.color).toBeUndefined();
+    } finally { await rm(dir, { recursive: true, force: true }); }
   });
 
   test('keeps extension ids distinct from built-ins and appends missing built-ins', () => {

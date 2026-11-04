@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { visibleWidth } from '@earendil-works/pi-tui';
-import { defaultConfig, type StatusLineConfig } from '../../src/status-line/config.ts';
+import { EXTERNAL_COLORS, defaultConfig, type StatusLineConfig } from '../../src/status-line/config.ts';
 import { formatCwd, formatTokens, renderStatusLine, sanitizeInline } from '../../src/status-line/render.ts';
 import { fakeTheme, snapshot, strip } from './helpers.ts';
 
@@ -105,6 +105,31 @@ describe('renderStatusLine', () => {
     const data = snapshot({ extensionStatuses: new Map([['plugin', '\x1b[32mgreen']]) });
     const line = renderStatusLine(data, config(), theme, 200).at(-1)!;
     expect(line).toContain('\x1b[32mgreen\x1b[0m');
+  });
+
+  test('external colour overrides replace embedded styling, stay isolated, and respect monochrome', () => {
+    const data = snapshot({ extensionStatuses: new Map([
+      ['custom', '\x1b[2;32mA\x1b[0m\x1b[44m界\nB\x1b[H\x1b]0;title\x07'],
+      ['original', '\x1b[35mnext'],
+    ]) });
+    for (const [color, code] of Object.entries(EXTERNAL_COLORS)) {
+      const cfg = config();
+      cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+      cfg.items.push({ id: 'extension:custom', row: 1, enabled: true, color: color as keyof typeof EXTERNAL_COLORS },
+        { id: 'extension:original', row: 1, enabled: true });
+      for (const mode of ['colorful', 'theme', 'mono'] as const) {
+        cfg.colorMode = mode;
+        const line = renderStatusLine(data, cfg, fakeTheme().theme, 200).join('');
+        expect(strip(line)).toBe('A界 B  next');
+        if (mode === 'mono') expect(line).not.toContain('\x1b');
+        else expect(line).toBe(`\x1b[${code}mA界 B\x1b[0m  \x1b[35mnext\x1b[0m`);
+        for (let width = 1; width < 20; width++) {
+          for (const wrapped of renderStatusLine(data, cfg, fakeTheme().theme, width)) {
+            expect(visibleWidth(wrapped)).toBeLessThanOrEqual(width);
+          }
+        }
+      }
+    }
   });
 
   test('styles each segment explicitly instead of wrapping lines in dim', () => {

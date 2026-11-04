@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { visibleWidth } from '@earendil-works/pi-tui';
-import { defaultConfig, type StatusLineConfig } from '../../src/status-line/config.ts';
+import { EXTERNAL_COLORS, defaultConfig, type StatusLineConfig } from '../../src/status-line/config.ts';
 import { StatusLineEditor } from '../../src/status-line/editor.ts';
 import { fakeTheme, snapshot, strip } from './helpers.ts';
 
@@ -157,6 +157,50 @@ describe('status line editor', () => {
     const ctrlC = mount();
     ctrlC.press(' ', CTRL_C);
     expect(ctrlC.result()).toBeUndefined();
+  });
+
+  test('previews and saves external colours independently without changing the global mode', () => {
+    const statuses = new Map([['a', '\x1b[2;32mTASK\x1b[0m'], ['b', 'OTHER']]);
+    const h = mount(defaultConfig(), statuses);
+    h.press('\x1b[F', UP, 't'); // a -> red
+    expect(h.text()).toContain('colour: red');
+    expect(h.editor.render(200).join('\n')).toContain('\x1b[31mTASK\x1b[0m');
+    expect(h.editor.render(200).join('\n')).not.toContain('\x1b[2;32m');
+    h.press(RIGHT, '3', 't', ENTER); // a -> green; row and side changes retain colour
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.colorMode).toBe('colorful');
+    expect(saved.items.find(item => item.id === 'extension:a')).toEqual({ id: 'extension:a', enabled: true, row: 3, side: 'right', color: 'green' });
+    expect(saved.items.find(item => item.id === 'extension:b')?.color).toBeUndefined();
+    const reopened = mount(saved, statuses);
+    reopened.press('\x1b[F'); // a remains selected as last row
+    expect(reopened.text()).toContain('colour: green');
+    reopened.press('T', 'T', ENTER); // original
+    expect((reopened.result() as StatusLineConfig).items.find(item => item.id === 'extension:a')).not.toHaveProperty('color');
+    expect(reopened.editor.render(200).join('\n')).toContain('\x1b[2;32mTASK\x1b[0m');
+  });
+
+  test('external colour cycling wraps, supports absent statuses and Kitty keys, and can be cancelled', () => {
+    const config = defaultConfig();
+    config.items.push({ id: 'extension:absent', row: 2, enabled: false });
+    const h = mount(config);
+    h.press('t'); // select a module first
+    expect(h.text()).toContain('Select an external module');
+    h.press('\x1b[F', 'T'); // original -> gray
+    expect(h.text()).toContain('colour: gray');
+    expect(h.text()).toContain('(not set now)');
+    h.press('t'); // gray -> original
+    expect(h.text()).toContain('colour: original');
+    expect(h.text()).not.toContain('unsaved changes');
+    for (let i = 0; i < Object.keys(EXTERNAL_COLORS).length + 1; i++) h.press('t');
+    expect(h.text()).not.toContain('unsaved changes');
+    h.press('\x1b[116u', ESC, ESC); // Kitty t, discard
+    expect(h.result()).toBeUndefined();
+    expect(config.items.at(-1)).not.toHaveProperty('color');
+    const mono = mount({ ...config, colorMode: 'mono' });
+    mono.press('\x1b[F', 't');
+    expect(mono.text()).toContain('Switch colour mode with c');
+    mono.press(ENTER);
+    expect((mono.result() as StatusLineConfig).items.at(-1)?.color).toBe('red');
   });
 
   test('discovers statuses while open without losing the selected module or creating an unsaved edit', () => {

@@ -5,6 +5,12 @@ import { errorMessage, writeJsonAtomic } from '../shared.ts';
 export const COLOR_MODES = ['colorful', 'theme', 'mono'] as const;
 export type ColorMode = typeof COLOR_MODES[number];
 
+/** Standard terminal colours for overriding an external module's own styling. */
+export const EXTERNAL_COLORS = {
+  red: 31, green: 32, yellow: 33, blue: 34, magenta: 35, cyan: 36, white: 37, gray: 90,
+} as const;
+export type ExternalColor = keyof typeof EXTERNAL_COLORS;
+
 export const BUILTIN_MODULES = [
   'state', 'model', 'thinking', 'cwd', 'git', 'session', 'context', 'tokens', 'cache', 'cost',
 ] as const;
@@ -25,6 +31,8 @@ export interface StatusLineItem {
   row: Row;
   /** Omitted in older settings; defaults to the left. */
   side?: Side;
+  /** External modules only. Omitted to retain the extension's original styling. */
+  color?: ExternalColor;
 }
 
 export interface StatusLineConfig {
@@ -115,7 +123,7 @@ export function validateConfig(value: unknown): StatusLineConfig {
   const seen = new Set<string>();
   const items: StatusLineItem[] = rawItems.map((raw, index) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail(`items[${index}] must be an object.`);
-    const { id, enabled: itemEnabled = true, row = 1, side } = raw as Record<string, unknown>;
+    const { id, enabled: itemEnabled = true, row = 1, side, color } = raw as Record<string, unknown>;
     if (typeof id !== 'string') fail(`items[${index}].id must be a string.`);
     if (!isBuiltinModule(id) && !isSeparator(id)) {
       const key = id.startsWith(EXTENSION_PREFIX) ? id.slice(EXTENSION_PREFIX.length) : '';
@@ -127,7 +135,14 @@ export function validateConfig(value: unknown): StatusLineConfig {
     if (typeof itemEnabled !== 'boolean') fail(`items[${index}].enabled must be true or false.`);
     if (typeof row !== 'number' || !Number.isSafeInteger(row) || row < 1) fail(`items[${index}].row must be a positive safe integer.`);
     if (side !== undefined && side !== 'left' && side !== 'right') fail(`items[${index}].side must be "left" or "right".`);
-    return { id: id as ModuleId, enabled: itemEnabled, row, ...(side === undefined ? {} : { side }) };
+    if (color !== undefined) {
+      if (!id.startsWith(EXTENSION_PREFIX)) fail(`items[${index}].color is only supported for external modules.`);
+      if (typeof color !== 'string' || !Object.hasOwn(EXTERNAL_COLORS, color)) {
+        fail(`items[${index}].color must be one of ${Object.keys(EXTERNAL_COLORS).join(', ')}.`);
+      }
+    }
+    return { id: id as ModuleId, enabled: itemEnabled, row, ...(side === undefined ? {} : { side }),
+      ...(color === undefined ? {} : { color: color as ExternalColor }) };
   });
   // Built-in modules added in later versions appear with their defaults.
   for (const item of DEFAULT_ITEMS) if (!seen.has(item.id)) items.push({ ...item });

@@ -1,8 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { decodeKittyPrintable, Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type TUI } from '@earendil-works/pi-tui';
 import {
-  BUILTIN_LABELS, COLOR_MODES, MAX_ITEMS, cloneConfig, defaultConfig, extensionKey, isSeparator, resolveItems,
-  type BuiltinModuleId, type Side, type StatusLineConfig, type StatusLineItem,
+  BUILTIN_LABELS, COLOR_MODES, EXTERNAL_COLORS, MAX_ITEMS, cloneConfig, defaultConfig, extensionKey, isSeparator, resolveItems,
+  type BuiltinModuleId, type ExternalColor, type Side, type StatusLineConfig, type StatusLineItem,
 } from './config.ts';
 import { renderStatusLine, sampleSnapshot, sanitizeInline, type StatusSnapshot } from './render.ts';
 
@@ -16,6 +16,7 @@ export interface StatusLineEditorOptions {
 
 const SETTINGS = ['enabled', 'colorMode', 'showNew'] as const;
 const MAX_VISIBLE_ITEMS = 8;
+const EXTERNAL_COLOR_CHOICES: (ExternalColor | undefined)[] = [undefined, ...Object.keys(EXTERNAL_COLORS) as ExternalColor[]];
 const COLOR_LABELS: Record<StatusLineConfig['colorMode'], string> = {
   colorful: 'colourful (varied theme colours)',
   theme: 'theme (accent + warnings only)',
@@ -24,7 +25,7 @@ const COLOR_LABELS: Record<StatusLineConfig['colorMode'], string> = {
 
 export const EDITOR_HINTS = [
   '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1–9 row', '+/- row', 's add separator', 'Del remove separator', 'c colour', 'p preview',
-  'r reset', 'Enter/Ctrl+S save', 'Esc cancel',
+  't/T external colour', 'r reset', 'Enter/Ctrl+S save', 'Esc cancel',
 ];
 
 function sortByPlacement(items: StatusLineItem[]): StatusLineItem[] {
@@ -106,6 +107,19 @@ export class StatusLineEditor implements Component {
   private cycleColor(): void {
     const index = COLOR_MODES.indexOf(this.draft.colorMode);
     this.draft.colorMode = COLOR_MODES[(index + 1) % COLOR_MODES.length]!;
+  }
+
+  private cycleExternalColor(direction: -1 | 1): void {
+    const item = this.draft.items[this.cursor - SETTINGS.length];
+    if (!item || extensionKey(item.id) === undefined) {
+      this.say('Select an external module to change its colour.');
+      return;
+    }
+    const index = EXTERNAL_COLOR_CHOICES.indexOf(item.color);
+    const color = EXTERNAL_COLOR_CHOICES[(index + direction + EXTERNAL_COLOR_CHOICES.length) % EXTERNAL_COLOR_CHOICES.length];
+    if (color === undefined) delete item.color;
+    else item.color = color;
+    this.say(`External module colour: ${color ?? 'original'}.${this.draft.colorMode === 'mono' ? ' Switch colour mode with c to see it.' : ''}`);
   }
 
   private move(direction: -1 | 1): void {
@@ -201,6 +215,7 @@ export class StatusLineEditor implements Component {
     else if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) this.removeSeparator();
     else if (matchesKey(data, Key.space) || data === ' ') this.toggle();
     else if (printable === 'c') this.cycleColor();
+    else if (printable === 't' || printable === 'T') this.cycleExternalColor(printable === 't' ? 1 : -1);
     else if (printable === 'p') this.preview = this.preview === 'live' ? 'sample' : 'live';
     else if (printable === 'r') {
       this.knownIds = new Set(defaultConfig().items.map(item => item.id));
@@ -234,7 +249,7 @@ export class StatusLineEditor implements Component {
     const text = statuses.get(key);
     return {
       label: `extension: ${sanitizeInline(key, false)}`,
-      detail: text === undefined ? '(not set now)' : sanitizeInline(text, false),
+      detail: `colour: ${item.color ?? 'original'} · ${text === undefined ? '(not set now)' : sanitizeInline(text, false)}`,
     };
   }
 

@@ -84,6 +84,8 @@ See the [goal reference](docs/goals.md) for commands, budget accounting, and con
 
 Run `/statusline` to open the status line editor. Choose which modules appear, place them on the left or right of any row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1`–`9` to choose a row, `+`/`-` to move between rows, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
 
+Select an external module and press `t` or `T` to cycle its colour forward or backward. Each module can use a named colour or keep the extension's original styling.
+
 The editor also lists status text published by other plugins through Pi's `setStatus` API. New status keys appear automatically. Your choices persist across chats, including preferences for plugins that are temporarily inactive.
 
 Values are spaced without automatic dot separators. Press `s` in the editor to add a separator item, then move it like any module. Delete removes a selected separator.

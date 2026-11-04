@@ -38,6 +38,7 @@ If saved settings change while the editor is open, the save reports a conflict a
 | `s` | Adds a separator item after the selected item, on the same row and side. |
 | Delete or Backspace | Removes the selected separator item. |
 | `c` | Cycles the colour mode. |
+| `t` or `T` | Cycles the selected external module's colour forward or backward, including its original styling. |
 | `p` | Switches between live and sample previews. |
 | `r` | Restores defaults in the draft. |
 | Enter or Ctrl+S | Saves the draft and closes the editor. |
@@ -89,7 +90,9 @@ Discovery runs while the pi-qol footer is mounted, including while the editor is
 
 The new-status visibility setting applies to all keys not yet listed in saved settings, including keys present when the editor opens. Explicitly toggling a key overrides that policy for the key. Previously saved visibility choices stay unchanged.
 
-External status text retains its ANSI colours in colour modes. Monochrome removes those colours. The renderer removes terminal control sequences and flattens multiline text to fit the footer.
+Each external module has a separate colour choice. The editor shows the choice beside the module and previews changes immediately. The choices are original, red, green, yellow, blue, magenta, cyan, white, and gray. Named colours use the terminal's palette. Colours remain saved when a plugin clears its status.
+
+Original preserves the extension's ANSI styling. A chosen colour replaces that styling, including dim text and background colours, across the whole module. Monochrome suppresses all colours while retaining saved choices. The renderer removes terminal control sequences and flattens multiline text to fit the footer.
 
 Pi has one custom footer slot. If another plugin calls `setFooter`, the latest call determines which footer appears. `/statusline on` installs the pi-qol footer again. `/statusline off` restores Pi's built-in footer when pi-qol owns the footer. It leaves a footer installed by another plugin in place.
 
@@ -104,6 +107,8 @@ Each command re-reads saved settings, including manual repairs and changes saved
 The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to a positive safe integer. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
 
 Built-in IDs are `state`, `model`, `thinking`, `cwd`, `git`, `session`, `context`, `tokens`, `cache`, and `cost`. External status IDs use `extension:<key>`. Missing built-in entries receive their default settings. Disabling a built-in module requires an entry with `enabled` set to `false`.
+
+External items accept an optional `color` field with one of the named colours above, for example `{"id":"extension:pi-subagents","enabled":true,"row":1,"color":"cyan"}`. Omitting `color` preserves the extension's original styling.
 
 Separator items use unique IDs such as `separator:1` and `separator:2`. They have the same `enabled`, `row`, and optional `side` fields as modules. No separators are added to default or existing settings.
 

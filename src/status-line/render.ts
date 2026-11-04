@@ -2,7 +2,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import {
-  extensionKey, isSeparator, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type Side, type StatusLineConfig,
+  EXTERNAL_COLORS, extensionKey, isSeparator, resolveItems, type BuiltinModuleId, type ColorMode, type Row, type Side, type StatusLineConfig,
 } from './config.ts';
 import { sanitizeInline } from './sanitize.ts';
 
@@ -178,7 +178,10 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
       text = painter.paint('separator', '·');
     } else if (key !== undefined) {
       const raw = data.extensionStatuses.get(key);
-      text = raw === undefined ? undefined : sanitizeInline(raw, config.colorMode !== 'mono');
+      text = raw === undefined ? undefined : sanitizeInline(raw, config.colorMode !== 'mono' && !item.color);
+      if (text && item.color && config.colorMode !== 'mono') {
+        text = `\x1b[${EXTERNAL_COLORS[item.color]}m${text}\x1b[0m`;
+      }
     } else {
       try { text = MODULES[item.id as BuiltinModuleId](data, painter); } catch { text = undefined; }
     }

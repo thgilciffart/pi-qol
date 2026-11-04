@@ -1,20 +1,26 @@
-import { unlink } from 'node:fs/promises';
+import { access, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { ThreadPicker } from './thread-picker.ts';
 import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type SessionInfo } from '@earendil-works/pi-coding-agent';
+import { errorMessage } from './shared.ts';
+import { sessionSearchText } from './threads/search.ts';
 
 export function matchingSessions(sessions: SessionInfo[], current: string | undefined, query: string): SessionInfo[] {
   const search = query.toLocaleLowerCase();
   return sessions.filter(session => (!current || resolve(session.path) !== resolve(current)) &&
-    `${session.name ?? ''}\n${session.firstMessage}\n${session.cwd}\n${session.id}`.toLocaleLowerCase().includes(search));
+    sessionSearchText(session).includes(search));
 }
 
 export async function deleteFiles(paths: string[]): Promise<{ deleted: number; deletedPaths: string[]; failures: string[] }> {
   const deletedPaths: string[] = [];
   const failures: string[] = [];
   for (const path of new Set(paths)) {
-    try { await unlink(path); deletedPaths.push(path); }
-    catch (error) { failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`); }
+    try {
+      await unlink(path);
+      deletedPaths.push(path);
+    } catch (error) {
+      failures.push(`${path}: ${errorMessage(error)}`);
+    }
   }
   return { deleted: deletedPaths.length, deletedPaths, failures };
 }
@@ -23,6 +29,18 @@ function interactive(ctx: ExtensionCommandContext): boolean {
   if (ctx.hasUI) return true;
   ctx.ui.notify('Thread deletion requires an interactive UI.', 'error');
   return false;
+}
+
+async function savedSessionFile(ctx: ExtensionCommandContext): Promise<string | undefined> {
+  const path = ctx.sessionManager.getSessionFile();
+  if (!path) return undefined;
+  try {
+    await access(path);
+    return path;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
 }
 
 function report(ctx: ExtensionCommandContext, result: Awaited<ReturnType<typeof deleteFiles>>): void {
@@ -37,7 +55,7 @@ export default function threads(pi: ExtensionAPI): void {
       if (!interactive(ctx)) return;
       if (args.trim()) { ctx.ui.notify('Usage: /delete', 'error'); return; }
       await ctx.waitForIdle();
-      const path = ctx.sessionManager.getSessionFile();
+      const path = await savedSessionFile(ctx);
       if (!await ctx.ui.confirm('Delete current thread?', path
         ? `Permanently delete ${path} and start a new chat? This cannot be undone.`
         : 'Discard this unsaved chat and start a new one?')) return;
@@ -82,7 +100,7 @@ export default function threads(pi: ExtensionAPI): void {
           },
         }));
       } catch (error) {
-        ctx.ui.notify(`Thread deletion failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        ctx.ui.notify(`Thread deletion failed: ${errorMessage(error)}`, 'error');
       }
     },
   });

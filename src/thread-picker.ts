@@ -1,5 +1,7 @@
 import type { SessionInfo, Theme } from '@earendil-works/pi-coding-agent';
 import { Input, matchesKey, truncateToWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
+import { errorMessage } from './shared.ts';
+import { sessionSearchText } from './threads/search.ts';
 
 type Grouping = 'none' | 'date' | 'project';
 type ListRow = { kind: 'heading'; label: string } | { kind: 'thread'; session: SessionInfo; index: number };
@@ -47,7 +49,7 @@ export class ThreadPicker implements Component, Focusable {
   private sessions(): SessionInfo[] {
     const query = this.input.getValue().toLocaleLowerCase();
     const sessions = (this.scope === 'project' ? this.project : this.all ?? []).filter(session =>
-      `${session.name ?? ''}\n${session.firstMessage}\n${session.cwd}\n${session.id}`.toLocaleLowerCase().includes(query));
+      sessionSearchText(session).includes(query));
     if (this.grouping === 'none') return sessions;
     return sessions.sort((a, b) => {
       const left = this.groupLabel(a), right = this.groupLabel(b);
@@ -98,7 +100,7 @@ export class ThreadPicker implements Component, Focusable {
   private async loadAll(): Promise<void> {
     this.loading = true;
     try { this.all = (await this.options.loadAll()).filter(session => !this.deletedPaths.has(session.path)); }
-    catch (error) { this.message = `Could not load threads: ${error instanceof Error ? error.message : String(error)}`; }
+    catch (error) { this.message = `Could not load threads: ${errorMessage(error)}`; }
     finally {
       this.loading = false;
       if (!this.disposed) this.options.requestRender();
@@ -106,7 +108,8 @@ export class ThreadPicker implements Component, Focusable {
   }
 
   private async deleteConfirmed(): Promise<void> {
-    const targets = this.confirmation!;
+    const targets = this.confirmation;
+    if (!targets) return;
     this.confirmation = undefined;
     this.deleting = true;
     try {
@@ -120,7 +123,7 @@ export class ThreadPicker implements Component, Focusable {
       this.message = `Deleted ${deleted.size} thread${deleted.size === 1 ? '' : 's'}.`;
       this.index = Math.min(this.index, Math.max(0, this.sessions().length - 1));
     } catch (error) {
-      this.message = `Deletion failed: ${error instanceof Error ? error.message : String(error)}`;
+      this.message = `Deletion failed: ${errorMessage(error)}`;
     } finally {
       this.deleting = false;
       if (!this.disposed) this.options.requestRender();

@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { errorMessage, writeJsonAtomic } from '../shared.ts';
 
 export const COLOR_MODES = ['colorful', 'theme', 'mono'] as const;
 export type ColorMode = typeof COLOR_MODES[number];
@@ -143,15 +143,15 @@ export async function loadConfig(path: string): Promise<LoadResult> {
   try { content = await readFile(path, 'utf8'); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'missing', config: defaultConfig() };
-    return { status: 'invalid', config: defaultConfig(), error: `cannot read ${path}: ${(error as Error).message}` };
+    return { status: 'invalid', config: defaultConfig(), error: `cannot read ${path}: ${errorMessage(error)}` };
   }
   try {
     let parsed: unknown;
     try { parsed = JSON.parse(content); }
-    catch (error) { fail(`invalid JSON (${(error as Error).message}).`); }
+    catch (error) { fail(`invalid JSON (${errorMessage(error)}).`); }
     return { status: 'ok', config: validateConfig(parsed) };
   } catch (error) {
-    return { status: 'invalid', config: defaultConfig(), error: (error as Error).message };
+    return { status: 'invalid', config: defaultConfig(), error: errorMessage(error) };
   }
 }
 
@@ -165,11 +165,7 @@ export async function saveConfig(path: string, config: StatusLineConfig, options
     try { await copyFile(path, target); backup = target; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, JSON.stringify(validated, null, 2) + '\n', { mode: 0o600 });
-    await rename(temporary, path);
-  } finally { await rm(temporary, { force: true }); }
+  await writeJsonAtomic(path, validated);
   return backup;
 }
 

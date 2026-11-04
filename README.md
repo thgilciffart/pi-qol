@@ -178,6 +178,8 @@ npm pack --dry-run
 
 The tests cover automatic naming, interrupted-turn continuation, goals, response statistics, deletion, ephemeral persistence, HTML rendering, redaction, and extension loading. They use temporary session files and local model fixtures and do not delete your saved chats.
 
+See the [codebase map](docs/architecture.md) for feature boundaries, persistence, and tests.
+
 See [Publish to npm](docs/publishing.md) for release commands and Pi package discovery.
 
 [MIT license](LICENSE). Embedded KaTeX assets retain their upstream license notices.

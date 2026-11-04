@@ -1,19 +1,15 @@
-import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from '@earendil-works/pi-coding-agent';
+import type { Usage } from '@earendil-works/pi-ai';
+import type {
+  ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider, SessionEntry,
+} from '@earendil-works/pi-coding-agent';
 import type { StatusSnapshot, UsageSummary } from './render.ts';
 
-interface UsageLike {
-  input?: number;
-  output?: number;
-  cacheRead?: number;
-  cacheWrite?: number;
-  cost?: { total?: number };
-}
-
+/** Session files come from disk, so numeric fields are still checked at runtime. */
 function num(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function add(totals: UsageSummary, usage: UsageLike | undefined): void {
+function add(totals: UsageSummary, usage: Usage | undefined): void {
   if (!usage) return;
   totals.input += num(usage.input);
   totals.output += num(usage.output);
@@ -23,25 +19,27 @@ function add(totals: UsageSummary, usage: UsageLike | undefined): void {
 }
 
 /** Cumulative usage across all session entries, matching what Pi's built-in footer counts. */
-export function computeUsage(entries: readonly unknown[]): UsageSummary {
+export function computeUsage(entries: readonly SessionEntry[]): UsageSummary {
   const totals: UsageSummary = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-  for (const raw of entries) {
-    const entry = raw as { type?: string; usage?: UsageLike; message?: { role?: string; usage?: UsageLike } };
-    if (entry.type === 'usage') add(totals, entry.usage);
-    else if (entry.type === 'message' && entry.message?.role === 'assistant') {
+  for (const entry of entries) {
+    if (entry.type === 'usage' || entry.type === 'branch_summary' || entry.type === 'compaction') {
+      add(totals, entry.usage);
+    } else if (entry.type === 'message' && entry.message?.role === 'assistant') {
       const usage = entry.message.usage;
       add(totals, usage);
       if (usage) {
         const prompt = num(usage.input) + num(usage.cacheRead) + num(usage.cacheWrite);
         totals.cacheHitRate = prompt > 0 ? (num(usage.cacheRead) / prompt) * 100 : undefined;
       }
-    } else if (entry.type === 'message' && entry.message?.role === 'toolResult') add(totals, entry.message.usage);
-    else if (entry.type === 'branch_summary' || entry.type === 'compaction') add(totals, entry.usage);
+    } else if (entry.type === 'message' && entry.message?.role === 'toolResult') {
+      add(totals, entry.message.usage);
+    }
   }
   return totals;
 }
 
-type Api = Pick<ExtensionAPI, 'getThinkingLevel' | 'getSessionName'>;
+/** The Pi API methods the footer reads. */
+export type StatusApi = Pick<ExtensionAPI, 'getThinkingLevel' | 'getSessionName'>;
 
 /**
  * Builds footer snapshots. Usage totals and context usage scan the session, while the footer renders
@@ -57,7 +55,7 @@ export class StatusData {
     this.cache = undefined;
   }
 
-  snapshot(ctx: ExtensionContext, pi: Api, footerData: ReadonlyFooterDataProvider | undefined): StatusSnapshot {
+  snapshot(ctx: ExtensionContext, pi: StatusApi, footerData: ReadonlyFooterDataProvider | undefined): StatusSnapshot {
     const sessionManager = ctx.sessionManager;
     const model = ctx.model;
     const key = [this.version, sessionManager.getSessionId(), sessionManager.getLeafId() ?? '',

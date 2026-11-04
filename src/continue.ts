@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Key } from '@earendil-works/pi-tui';
+import { hasConversation } from './shared.ts';
 
 export const CONTINUE_MESSAGE = 'pi-qol-continue';
 export const CONTINUE_SHORTCUT = Key.ctrlAlt('c');
@@ -14,9 +15,7 @@ export default function continueTurn(pi: ExtensionAPI): void {
       ctx.ui.notify('There is already a message waiting.', 'info');
       return;
     }
-    const hasConversation = ctx.sessionManager.getBranch().some(entry => entry.type === 'message' &&
-      (entry.message.role === 'user' || entry.message.role === 'assistant'));
-    if (!hasConversation) {
+    if (!hasConversation(ctx.sessionManager.getBranch())) {
       ctx.ui.notify('No conversation to continue. Send a message first.', 'info');
       return;
     }

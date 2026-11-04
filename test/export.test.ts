@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { test } from 'node:test';
+import { test } from 'bun:test';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { getPackageDir, SessionManager, initTheme } from '@earendil-works/pi-coding-agent';
 import { enhanceHtml } from '../src/export/enhance.ts';
@@ -139,17 +139,4 @@ test('exports a running turn without waiting or interrupting it', async () => {
     sm.appendMessage({ role: 'toolResult', toolCallId: 'pending-call', toolName: 'bash', content: [{ type: 'text', text: 'Task finished later' }], isError: false, timestamp: Date.now() });
     assert.doesNotMatch(JSON.stringify(data), /Task finished later/);
   } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-
-test('Pi loads the extension and registers the command', async () => {
-  const { loadExtensions } = await import(pathToFileURL(join(getPackageDir(), 'dist/core/extensions/loader.js')).href);
-  const result = await loadExtensions([new URL('../index.ts', import.meta.url).pathname], process.cwd());
-  assert.deepEqual(result.errors, []);
-  assert.equal(result.extensions.length, 1);
-  for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name', 'continue']) assert.ok(result.extensions[0].commands.has(command));
-  assert.ok(result.extensions[0].shortcuts.has('ctrl+alt+c'));
-  for (const shortcut of ['alt+p', 'alt+,', 'alt+.']) assert.ok(result.extensions[0].shortcuts.has(shortcut));
-  assert.ok(!result.extensions[0].shortcuts.has('ctrl+e'));
-  for (const tool of ['get_goal', 'create_goal', 'update_goal']) assert.ok(result.extensions[0].tools.has(tool));
 });

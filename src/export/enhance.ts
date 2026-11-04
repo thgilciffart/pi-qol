@@ -36,7 +36,7 @@ export async function enhanceHtml(html: string): Promise<string> {
   const anchor = html.indexOf('marked.use(');
   const scriptStart = html.lastIndexOf('<script', anchor);
   if (anchor < 0 || scriptStart < 0 || html.indexOf('</script>', scriptStart) < anchor) {
-    throw new Error('Unsupported Pi HTML template: cannot locate Markdown initialization. Update pi-better-export.');
+    throw new Error('Unsupported Pi HTML template: cannot locate Markdown initialization. Update pi-qol.');
   }
   assets ??= loadAssets().catch((error) => { assets = undefined; throw error; });
   const bundle = await assets;

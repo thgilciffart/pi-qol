@@ -37,7 +37,7 @@ export function applyLiveTheme(html: string, theme: Pick<Theme, 'colors'>, expli
     ? [Math.min(255, r + 10), Math.min(255, g + 5), Math.max(0, b - 20)]
     : [Math.min(255, r + 20), Math.min(255, g + 15), b]);
   Object.assign(colors, { exportPageBg: pageBg, exportCardBg: cardBg, exportInfoBg: infoBg, 'body-bg': pageBg, 'container-bg': cardBg, 'info-bg': infoBg });
-  if (!/<style>\s*:root\s*\{[^}]*--userMessageBg:/s.test(html)) throw new Error('Unsupported Pi HTML theme block. Update pi-better-export.');
+  if (!/<style>\s*:root\s*\{[^}]*--userMessageBg:/s.test(html)) throw new Error('Unsupported Pi HTML theme block. Update pi-qol.');
   // Only replace variable declarations. Every native layout rule stays untouched.
   return html.replace(/(<style>\s*:root\s*\{)[^}]*\}/, (_match, start: string) => `${start}\n${Object.entries(colors).map(([key, value]) => `      --${key}: ${value};`).join('\n')}\n    }`);
 }

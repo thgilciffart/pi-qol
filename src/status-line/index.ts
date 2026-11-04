@@ -1,27 +1,20 @@
 import { join } from 'node:path';
 import {
   getAgentDir, type ExtensionAPI, type ExtensionCommandContext, type ExtensionContext,
-  type ReadonlyFooterDataProvider, type Theme,
 } from '@earendil-works/pi-coding-agent';
-import type { Component, TUI } from '@earendil-works/pi-tui';
+import { errorMessage } from '../shared.ts';
+import { parseStatusLineArgs, statusLineCompletions } from './commands.ts';
 import {
-  COLOR_MODES, cloneConfig, defaultConfig, extensionKey, loadConfig, saveConfig,
-  type ColorMode, type StatusLineConfig,
+  cloneConfig, defaultConfig, extensionKey, loadConfig, saveConfig, type StatusLineConfig,
 } from './config.ts';
 import { StatusData } from './data.ts';
 import { StatusLineEditor } from './editor.ts';
-import { renderStatusLine } from './render.ts';
+import { StatusFooter } from './footer.ts';
 
 export interface StatusLineOptions {
   /** Settings file. Defaults to `<agent dir>/pi-qol/status-line.json`. */
   configPath?: string;
 }
-
-const COMMANDS = ['on', 'off', 'reset', 'status', 'colorful', 'theme', 'mono'];
-const COLOR_ALIASES: Record<string, ColorMode> = {
-  colorful: 'colorful', colourful: 'colorful', color: 'colorful', colour: 'colorful',
-  theme: 'theme', mono: 'mono', monochrome: 'mono', plain: 'mono',
-};
 
 function canMountFooter(ctx: ExtensionContext): boolean {
   return ctx.hasUI && ctx.mode === 'tui';
@@ -44,35 +37,13 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
   let activeCtx: ExtensionContext | undefined;
   let footer: StatusFooter | undefined;
 
-  class StatusFooter implements Component {
-    private readonly unsubscribe: () => void;
-    private disposed = false;
-
-    constructor(private readonly tui: TUI, private readonly theme: Theme, readonly footerData: ReadonlyFooterDataProvider) {
-      this.unsubscribe = footerData.onBranchChange(() => tui.requestRender());
-    }
-
-    requestRender(): void { this.tui.requestRender(); }
-
-    render(width: number): string[] {
-      const ctx = activeCtx;
-      if (!ctx || this.disposed) return [];
-      try {
-        let theme = this.theme;
-        try { theme = ctx.ui.theme ?? this.theme; } catch { /* keep the factory theme */ }
-        return renderStatusLine(data.snapshot(ctx, pi, this.footerData), config, theme, width);
-      } catch { return []; }
-    }
-
-    invalidate(): void { data.invalidate(); }
-
-    dispose(): void {
-      if (this.disposed) return;
-      this.disposed = true;
-      this.unsubscribe();
-      if (footer === this) footer = undefined;
-    }
-  }
+  const footerDependencies = {
+    context: () => activeCtx,
+    config: () => config,
+    data,
+    pi,
+    onDispose: (disposed: StatusFooter) => { if (footer === disposed) footer = undefined; },
+  };
 
   async function load(): Promise<void> {
     const result = await loadConfig(configPath);
@@ -96,7 +67,7 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
       return;
     }
     if (footer) { footer.requestRender(); return; }
-    ctx.ui.setFooter((tui, theme, footerData) => (footer = new StatusFooter(tui, theme, footerData)));
+    ctx.ui.setFooter((tui, theme, footerData) => (footer = new StatusFooter(tui, theme, footerData, footerDependencies)));
   }
 
   async function persist(update: (latest: StatusLineConfig) => StatusLineConfig, ctx: ExtensionCommandContext,
@@ -128,44 +99,38 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
   }
 
   async function command(args: string, ctx: ExtensionCommandContext): Promise<void> {
-    const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const action = words[0] === 'color' || words[0] === 'colour' ? words[1] ?? '' : words[0] ?? '';
-    if (words.length > (words[0] === 'color' || words[0] === 'colour' ? 2 : 1)) {
-      throw new Error('Too many arguments. Use /status-line [on|off|reset|status|colorful|theme|mono].');
-    }
-    if (action === 'reset') {
+    const action = parseStatusLineArgs(args);
+    if (action.kind === 'reset') {
       await persist(() => defaultConfig(), ctx);
       ctx.ui.notify('Status line reset to defaults.', 'info');
       return;
     }
     await load();
     reportLoadError(ctx);
-    if (!action) {
-      if (canMountFooter(ctx)) { apply(ctx); await openEditor(ctx); return; }
-      ctx.ui.notify(`${describe(config, configPath)}\nThe interactive editor needs the terminal UI.`, 'info');
-      return;
+    switch (action.kind) {
+      case 'editor':
+        if (canMountFooter(ctx)) { apply(ctx); await openEditor(ctx); return; }
+        ctx.ui.notify(`${describe(config, configPath)}\nThe interactive editor needs the terminal UI.`, 'info');
+        return;
+      case 'status':
+        ctx.ui.notify(describe(config, configPath), 'info');
+        return;
+      case 'enabled':
+        await persist(latest => ({ ...latest, enabled: action.enabled }), ctx);
+        ctx.ui.notify(action.enabled ? 'Status line on.' : 'Status line off. The pi-qol footer is disabled.', 'info');
+        return;
+      case 'color':
+        await persist(latest => ({ ...latest, colorMode: action.mode }), ctx);
+        ctx.ui.notify(`Status line colour: ${action.mode}.`, 'info');
     }
-    if (action === 'status') { ctx.ui.notify(describe(config, configPath), 'info'); return; }
-    if (action === 'on' || action === 'off') {
-      await persist(latest => ({ ...latest, enabled: action === 'on' }), ctx);
-      ctx.ui.notify(action === 'on' ? 'Status line on.' : 'Status line off. The pi-qol footer is disabled.', 'info');
-      return;
-    }
-    const mode = COLOR_ALIASES[action];
-    if (!mode) throw new Error(`Unknown option "${action}". Use on, off, reset, status, or a colour mode: ${COLOR_MODES.join(', ')}.`);
-    await persist(latest => ({ ...latest, colorMode: mode }), ctx);
-    ctx.ui.notify(`Status line colour: ${mode}.`, 'info');
   }
 
   pi.registerCommand('status-line', {
     description: 'Configure the pi-qol status line (footer)',
-    getArgumentCompletions: (prefix) => {
-      const matches = COMMANDS.filter(value => value.startsWith(prefix.trim().toLowerCase()));
-      return matches.length ? matches.map(value => ({ value, label: value })) : null;
-    },
+    getArgumentCompletions: statusLineCompletions,
     handler: async (args, ctx) => {
       try { await command(args, ctx); }
-      catch (error) { ctx.ui.notify(`Status line: ${error instanceof Error ? error.message : String(error)}`, 'error'); }
+      catch (error) { ctx.ui.notify(`Status line: ${errorMessage(error)}`, 'error'); }
     },
   });
 

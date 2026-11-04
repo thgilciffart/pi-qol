@@ -201,6 +201,41 @@ describe('status line extension', () => {
     } finally { await h.cleanup(); }
   });
 
+  test('color without a mode shows usage instead of opening the editor or saving', async () => {
+    const h = await harness();
+    try {
+      const c = context();
+      await h.emit('session_start', c.ctx, { reason: 'startup' });
+      for (const args of ['color', 'colour', '  COLOR  ']) {
+        await h.run(args, c.ctx);
+        expect(c.notices.at(-1)).toEqual([expect.stringMatching(/Choose a colour mode\. Use \/status-line colou?r <colorful\|theme\|mono>/), 'error']);
+      }
+      expect(c.editor()).toBeUndefined();
+      await expect(readFile(h.configPath, 'utf8')).rejects.toThrow();
+      await h.run('colour mono', c.ctx);
+      expect((await h.saved()).colorMode).toBe('mono');
+      await h.run('color on', c.ctx);
+      expect(c.notices.at(-1)).toEqual([expect.stringContaining('Unknown option "on"'), 'error']);
+      await h.run('color theme extra', c.ctx);
+      expect(c.notices.at(-1)).toEqual([expect.stringContaining('Too many arguments'), 'error']);
+      expect((await h.saved()).colorMode).toBe('mono');
+    } finally { await h.cleanup(); }
+  });
+
+  test('argument completions offer direct commands and colour modes after color or colour', async () => {
+    const h = await harness();
+    try {
+      const complete = (prefix: string) => h.commands.get('status-line').getArgumentCompletions(prefix)?.map((item: any) => item.value) ?? null;
+      expect(complete('')).toEqual(['on', 'off', 'reset', 'status', 'colorful', 'theme', 'mono', 'color', 'colour']);
+      expect(complete('col')).toEqual(['colorful', 'color', 'colour']);
+      expect(complete('color ')).toEqual(['color colorful', 'color theme', 'color mono']);
+      expect(complete('colour m')).toEqual(['colour mono']);
+      expect(complete('Color T')).toEqual(['color theme']);
+      expect(complete('color x')).toBeNull();
+      expect(complete('zzz')).toBeNull();
+    } finally { await h.cleanup(); }
+  });
+
   test('a disabled config keeps the built-in footer on startup', async () => {
     const h = await harness(JSON.stringify({ enabled: false }));
     try {

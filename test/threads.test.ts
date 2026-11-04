@@ -2,12 +2,16 @@ import { test, expect } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import threads, { matchingSessions, deleteFiles } from '../src/threads.ts';
 
 function harness(manager: SessionManager) {
   const commands = new Map<string, any>();
   const notifications: string[] = [];
+  const prompts: string[] = [];
+  const savedFile = manager.getSessionFile();
+  const hadSavedFile = savedFile !== undefined && existsSync(savedFile);
   let confirmed = true;
   let cancelled = false;
   let hasUI = true;
@@ -16,7 +20,10 @@ function harness(manager: SessionManager) {
   let picker: any;
   const ctx: any = { mode: 'tui', cwd: manager.getCwd(), sessionManager: manager, waitForIdle: async () => {},
     get hasUI() { return hasUI; },
-    ui: { notify: (text: string) => notifications.push(text), confirm: async () => confirmed,
+    ui: { notify: (text: string) => notifications.push(text), confirm: async (_title: string, message: string) => {
+      prompts.push(message);
+      return confirmed;
+    },
       custom: async (factory: any) => {
         picker = factory({ requestRender() {}, terminal: { rows: 30 } }, { fg: (_: string, text: string) => text, bg: (_: string, text: string) => text, bold: (text: string) => text }, {}, () => {});
         for (const key of keys) {
@@ -29,13 +36,13 @@ function harness(manager: SessionManager) {
       newSessions++;
       if (cancelled) return { cancelled: true };
       // The old file must exist until the host has switched sessions.
-      if (manager.getSessionFile()) await readFile(manager.getSessionFile()!);
+      if (hadSavedFile) await readFile(savedFile!);
       await options.withSession(ctx);
       return { cancelled: false };
     },
   };
   threads({ registerCommand: (name: string, spec: any) => commands.set(name, spec) } as any);
-  return { keys, notifications, run: (name: string, args = '') => commands.get(name).handler(args, ctx),
+  return { keys, notifications, prompts, run: (name: string, args = '') => commands.get(name).handler(args, ctx),
     decline: () => { confirmed = false; }, cancelSwitch: () => { cancelled = true; },
     noUI: () => { hasUI = false; }, get newSessions() { return newSessions; } };
 }
@@ -77,6 +84,20 @@ test('deletion refuses headless calls', async () => {
   const h = harness(SessionManager.inMemory()); h.noUI();
   await h.run('delete'); await h.run('delete-threads');
   expect(h.newSessions).toBe(0); expect(h.notifications).toHaveLength(2);
+});
+
+test('deleting an empty chat discards it without reporting a missing session file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'pi-qol-empty-delete-'));
+  try {
+    const manager = SessionManager.create(dir, dir);
+    expect(manager.getSessionFile()).toBeDefined();
+    expect(existsSync(manager.getSessionFile()!)).toBe(false);
+    const h = harness(manager);
+    await h.run('delete');
+    expect(h.newSessions).toBe(1);
+    expect(h.prompts).toEqual(['Discard this unsaved chat and start a new one?']);
+    expect(h.notifications).toEqual(['Discarded the unsaved chat.']);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('file failures are reported without stopping the batch, and paths are deduplicated', async () => {

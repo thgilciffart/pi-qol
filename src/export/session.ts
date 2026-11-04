@@ -20,7 +20,7 @@ const dataPattern = /(<script\s+id="session-data"\s+type="application\/json">)([
 
 export function readSessionData(html: string): SessionData {
   const match = dataPattern.exec(html);
-  if (!match) throw new Error('Unsupported Pi session data. Update pi-better-export.');
+  if (!match) throw new Error('Unsupported Pi session data. Update pi-qol.');
   const data = JSON.parse(Buffer.from(match[2], 'base64').toString('utf8'));
   if (!Array.isArray(data.entries)) throw new Error('Invalid Pi session data.');
   return data;

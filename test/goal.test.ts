@@ -64,6 +64,14 @@ function harness(manager = SessionManager.inMemory()) {
 }
 
 describe('/goal', () => {
+  test('create_goal persists the complete initial state only once', async () => {
+    const h = harness();
+    await h.tool('create_goal', { objective: 'Finish the task', token_budget: 1000 });
+    const entries = h.manager.getEntries().filter(entry => entry.type === 'custom' && entry.customType === GOAL_ENTRY);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].type === 'custom' && entries[0].data).toMatchObject({ objective: 'Finish the task', tokenBudget: 1000, turns: 1 });
+  });
+
   test('starts work with a durable objective and shows status', async () => {
     const h = harness();
     await h.run('Make the checkout tests pass');

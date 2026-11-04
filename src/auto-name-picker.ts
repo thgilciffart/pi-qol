@@ -1,4 +1,5 @@
 import { ModelSelectorComponent, type ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
+import { findModelRef } from './shared.ts';
 
 export async function pickNamingModel(ctx: ExtensionCommandContext, current: string): Promise<string | undefined> {
   if (!ctx.hasUI) throw new Error('Usage: /auto-name model <provider/model|current>');
@@ -9,9 +10,7 @@ export async function pickNamingModel(ctx: ExtensionCommandContext, current: str
     return selected === followChat ? 'current' : selected;
   }
 
-  const separator = current.indexOf('/');
-  const selectedModel = current === 'current' ? ctx.model :
-    ctx.modelRegistry.find(current.slice(0, separator), current.slice(separator + 1));
+  const selectedModel = current === 'current' ? ctx.model : findModelRef(ctx.modelRegistry, current);
   // The native selector needs four runtime methods. Forward them through the
   // public extension registry so it uses Pi's existing models and credentials.
   type Runtime = ConstructorParameters<typeof ModelSelectorComponent>[2];

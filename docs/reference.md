@@ -28,7 +28,7 @@ Statistics rows persist as custom session entries and never enter model context.
 | `/goal [objective]` | Shows the current goal, or sets an objective and starts work. See the [goal reference](goals.md) for lifecycle and budget commands. |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
 | `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |
-| `/ephemeral [prompt]` | Starts a new in-memory chat after confirmation. Sends the optional prompt into the new chat. An already ephemeral chat remains active. |
+| `/ephemeral [prompt]` | Immediately starts an in-memory chat and sends the optional prompt. With no prompt, an empty, idle ephemeral chat returns to the previous saved chat. Chats that contain messages remain private. |
 | `/better-export [flags] [file.html]` | Saves an HTML export of a file-backed session. |
 
 `/continue` and Ctrl+Alt+C start a new model request from the active conversation using a hidden continuation cue. They do not add a user message, clear the editor draft, or reconnect the cancelled stream. They leave goal status unchanged. Empty conversations, busy sessions, and sessions with queued input are not continued.

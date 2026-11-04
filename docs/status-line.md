@@ -17,6 +17,8 @@ The custom status line is enabled by default in Pi's terminal UI. It displays se
 
 `/status-line color <mode>` and `/status-line colour <mode>` also select a colour mode. Outside the terminal UI, `/status-line` reports the configuration instead of opening the editor.
 
+The `color` and `colour` forms require a mode. Other actions, such as `on` and `reset`, use the direct commands in the table.
+
 ## Editor keys
 
 The editor has a live preview and a sample preview. Changes remain in the draft until saved. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.

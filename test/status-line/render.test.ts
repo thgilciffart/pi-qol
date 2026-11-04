@@ -34,7 +34,7 @@ describe('renderStatusLine', () => {
     const { theme } = fakeTheme();
     const lines = renderStatusLine(snapshot(), config(), theme, 200).map(strip);
     expect(lines).toEqual([
-      '● ready · gpt-test · think high · ~/work/app · ⎇ main · “Fix footer”',
+      '● ready · gpt-test · high · ~/work/app · ⎇ main · “Fix footer”',
       'ctx 75% left of 200k · ↑12k ↓3.4k · cache R50k W2.0k 80% hit · $0.250',
     ]);
   });
@@ -213,10 +213,10 @@ describe('renderStatusLine', () => {
     const cfg = config({ colorMode: 'mono' });
     cfg.items.forEach(item => { if (['model', 'context', 'cost'].includes(item.id)) item.side = 'right'; });
     cfg.items.push({ id: 'extension:mcp', row: 1, side: 'right', enabled: true });
-    const data = snapshot({ extensionStatuses: new Map([['mcp', 'MCP 界界 3 servers']]) });
+    const data = snapshot({ cwd: '/home/me/work/application', extensionStatuses: new Map([['mcp', 'MCP 界界 3 servers']]) });
     const lines = renderStatusLine(data, cfg, fakeTheme().theme, 60);
     expect(lines[0]).toEndWith('gpt-test · MCP 界界 3 servers');
-    expect(lines[1]).toContain('~/work/app · ⎇ main · “Fix footer”');
+    expect(lines[1]).toContain('~/work/application · ⎇ main · “Fix footer”');
     expect(lines[1]).not.toContain('+1');
 
     cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));

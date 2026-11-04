@@ -114,8 +114,7 @@ const MODULES: Record<BuiltinModuleId, ModuleRenderer> = {
   thinking: (data, p) => {
     if (!data.model?.reasoning) return undefined;
     const level = data.thinkingLevel || 'off';
-    const value = p.mode === 'colorful' ? p.token(THINKING_COLORS[level] ?? 'thinkingText', level) : p.paint('ok', level);
-    return `${p.paint('label', 'think')} ${value}`;
+    return p.mode === 'colorful' ? p.token(THINKING_COLORS[level] ?? 'thinkingText', level) : p.paint('ok', level);
   },
   cwd: (data, p) => {
     const path = sanitizeInline(formatCwd(data.cwd, data.home), false);

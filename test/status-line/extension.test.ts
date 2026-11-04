@@ -121,10 +121,10 @@ describe('status line extension', () => {
       await h.emit('session_start', c.ctx, { reason: 'startup' });
       expect(c.footers).toHaveLength(1);
       const lines = c.render();
-      expect(lines[0]).toBe('● ready · test-model · think medium · /tmp/project · ⎇ main · “My session”');
+      expect(lines[0]).toBe('● ready · test-model · medium · /tmp/project · ⎇ main · “My session”');
       expect(lines[1]).toBe('ctx 90% left of 10k · ↑1.0k ↓200 · $0.010');
       h.setThinking('high');
-      expect(c.render()[0]).toContain('think high');
+      expect(c.render()[0]).toContain('high');
       expect(c.mounted().render(200)[0]).toContain('\x1b[');
     } finally { await h.cleanup(); }
   });

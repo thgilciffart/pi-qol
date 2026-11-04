@@ -114,7 +114,7 @@ describe('status line editor', () => {
     expect(h.text()).toContain('Row 1 · Right');
     expect(h.text()).toContain('❯ [x] Model');
     h.press(']'); // thinking now appears before model on the right
-    expect(h.text().split('\n').find(line => line.includes('● ready'))?.trimEnd()).toEndWith('think high · gpt-test');
+    expect(h.text().split('\n').find(line => line.includes('● ready'))?.trimEnd()).toEndWith('high · gpt-test');
     h.press(LEFT);
     expect(h.text()).toContain('❯ [x] Model');
     h.press(RIGHT, '2');

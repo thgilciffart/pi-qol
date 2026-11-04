@@ -226,6 +226,34 @@ describe('status line editor', () => {
     expect(h.renders()).toBe(1);
   });
 
+  test('moves modules to rows above nine and preserves their side and focus', () => {
+    const h = mount();
+    for (let i = 0; i < FIRST_ITEM + 1; i++) h.press(DOWN); // model
+    h.press(RIGHT, '9', '+', '+', '+', '-'); // row 11
+    expect(h.text()).toContain('Row 11 · Right');
+    expect(h.text()).toContain('❯ [x] Model');
+    h.press(']'); // row 12
+    h.press(ENTER);
+    const result = h.result() as StatusLineConfig;
+    expect(result.items.find(item => item.id === 'model')).toEqual({ id: 'model', enabled: true, row: 12, side: 'right' });
+    expect(result.items).toHaveLength(defaultConfig().items.length);
+  });
+
+  test('a large number of rows keeps the editor controls visible and the preview follows selection', () => {
+    const config = defaultConfig();
+    config.items = config.items.map((item, i) => ({ ...item, row: i + 1 }));
+    const editor = new StatusLineEditor({ requestRender() {}, terminal: { rows: 24 } }, fakeTheme().theme, {
+      config, discoveryAvailable: true, liveSnapshot: () => snapshot(),
+    }, () => {});
+    editor.handleInput('\x1b[F');
+    const lines = editor.render(100).map(strip);
+    expect(lines.length).toBeLessThanOrEqual(19);
+    expect(lines.join('\n')).toContain('Row 10 · Left');
+    expect(lines.join('\n')).toContain('❯ [x] Cost');
+    expect(lines.join('\n')).toContain('Esc cancel');
+    expect(lines.slice(3, 7).join('\n')).toContain('$0.250');
+  });
+
   test('adds independent separator items and lets them be reordered, placed, toggled, and removed', () => {
     const h = mount();
     for (let i = 0; i < FIRST_ITEM + 1; i++) h.press(DOWN); // model

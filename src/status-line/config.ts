@@ -12,12 +12,11 @@ export type BuiltinModuleId = typeof BUILTIN_MODULES[number];
 
 /** Prefix for status keys set by other extensions through ctx.ui.setStatus(key, text). */
 export const EXTENSION_PREFIX = 'extension:';
-export const MAX_ROWS = 2;
 export const MAX_ITEMS = 200;
 const MAX_KEY_LENGTH = 200;
 
 export type ModuleId = BuiltinModuleId | `extension:${string}` | `separator:${number}`;
-export type Row = 1 | 2;
+export type Row = number;
 export type Side = 'left' | 'right';
 
 export interface StatusLineItem {
@@ -126,7 +125,7 @@ export function validateConfig(value: unknown): StatusLineConfig {
     if (seen.has(id)) fail(`items contains "${id}" more than once.`);
     seen.add(id);
     if (typeof itemEnabled !== 'boolean') fail(`items[${index}].enabled must be true or false.`);
-    if (row !== 1 && row !== 2) fail(`items[${index}].row must be 1 or 2.`);
+    if (typeof row !== 'number' || !Number.isSafeInteger(row) || row < 1) fail(`items[${index}].row must be a positive safe integer.`);
     if (side !== undefined && side !== 'left' && side !== 'right') fail(`items[${index}].side must be "left" or "right".`);
     return { id: id as ModuleId, enabled: itemEnabled, row, ...(side === undefined ? {} : { side }) };
   });

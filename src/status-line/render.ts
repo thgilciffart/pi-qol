@@ -39,7 +39,9 @@ export function formatTokens(count: number): string {
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
   if (count < 1000000) return `${Math.round(count / 1000)}k`;
   if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
-  return `${Math.round(count / 1000000)}M`;
+  if (count < 1000000000) return `${Math.round(count / 1000000)}M`;
+  if (count < 10000000000) return `${(count / 1000000000).toFixed(1)}B`;
+  return `${Math.round(count / 1000000000)}B`;
 }
 
 export function formatCwd(cwd: string, home: string | undefined): string {
@@ -161,14 +163,13 @@ const MODULES: Record<BuiltinModuleId, ModuleRenderer> = {
 };
 
 const ITEM_GAP = '  ';
-const MAX_LINES_PER_ROW = 2;
 
 export interface RenderedSegment { id: string; text: string; side: Side }
 
 /** Rendered text of each enabled module, grouped by row, in configured order. */
 export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, theme: Theme): Map<Row, RenderedSegment[]> {
   const painter = createPainter(theme, config.colorMode);
-  const rows = new Map<Row, RenderedSegment[]>([[1, []], [2, []]]);
+  const rows = new Map<Row, RenderedSegment[]>();
   for (const item of resolveItems(config, data.extensionStatuses.keys())) {
     if (!item.enabled) continue;
     const key = extensionKey(item.id);
@@ -181,9 +182,12 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
     } else {
       try { text = MODULES[item.id as BuiltinModuleId](data, painter); } catch { text = undefined; }
     }
-    if (text && visibleWidth(text) > 0) rows.get(item.row)!.push({ id: item.id, text, side: item.side ?? 'left' });
+    if (text && visibleWidth(text) > 0) {
+      if (!rows.has(item.row)) rows.set(item.row, []);
+      rows.get(item.row)!.push({ id: item.id, text, side: item.side ?? 'left' });
+    }
   }
-  return rows;
+  return new Map([...rows].sort(([a], [b]) => a - b));
 }
 
 /** Separators decorate the gap before the next module, never a line boundary. */
@@ -201,8 +205,8 @@ function contentSegments(segments: RenderedSegment[], gap: string): { text: stri
   return content;
 }
 
-function packRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string,
-  maxLines = MAX_LINES_PER_ROW, nextLineWidth = width): string[] {
+function packRow(segments: RenderedSegment[], width: number, separator: string,
+  nextLineWidth: (line: number) => number = () => width): string[] {
   const lines: string[] = [];
   const content = contentSegments(segments, separator);
   let line = '';
@@ -221,30 +225,23 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
       continue;
     }
     if (line) {
-      if (lines.length + 1 >= maxLines) break;
       lines.push(line);
-      lineLimit = nextLineWidth;
+      lineLimit = nextLineWidth(lines.length);
       text = fit(segment.text);
       textWidth = visibleWidth(text);
     }
     line = text;
     lineWidth = textWidth;
   }
-  const remaining = content.length - index;
-  if (remaining > 0) {
-    const marker = more(remaining);
-    const markerWidth = visibleWidth(marker) + 1;
-    line = lineWidth + markerWidth <= lineLimit ? `${line} ${marker}` : `${truncateToWidth(line, Math.max(0, lineLimit - markerWidth), '…')} ${marker}`;
-  }
   if (line) lines.push(line);
   return lines.map((line, index) => {
-    const limit = index === 0 ? width : nextLineWidth;
+    const limit = index === 0 ? width : nextLineWidth(index);
     return visibleWidth(line) > limit ? truncateToWidth(line, limit, '') : line;
   });
 }
 
 /** Keep each side in configured order and anchor the right group to the terminal edge. */
-function alignRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string): string[] {
+function alignRow(segments: RenderedSegment[], width: number, separator: string): string[] {
   const populated = (side: Side) => {
     const group = segments.filter(segment => segment.side === side);
     return group.some(segment => !isSeparator(segment.id)) ? group : [];
@@ -252,10 +249,10 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
   const left = populated('left');
   const right = populated('right');
   const alignRight = (line: string) => ' '.repeat(Math.max(0, width - visibleWidth(line))) + line;
-  if (!right.length) return packRow(left, width, separator, more);
-  if (!left.length) return packRow(right, width, separator, more).map(alignRight);
+  if (!right.length) return packRow(left, width, separator);
+  if (!left.length) return packRow(right, width, separator).map(alignRight);
   // A one-column terminal cannot fit both sides on one line.
-  if (width === 1) return [...packRow(left, width, separator, more, 1), ...packRow(right, width, separator, more, 1)];
+  if (width === 1) return [...packRow(left, width, separator), ...packRow(right, width, separator)];
 
   const gap = Math.min(2, width - 2);
   const available = width - gap;
@@ -263,12 +260,12 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
     .map(segment => (segment.prefix ? segment.prefix + separator : '') + segment.text).join(separator));
   const leftWidth = Math.min(needed(left), Math.max(1, available - Math.min(needed(right), Math.floor(available / 2))));
   const rightWidth = available - leftWidth;
-  let leftLines = packRow(left, leftWidth, separator, more);
-  let rightLines = packRow(right, rightWidth, separator, more);
-  if (rightLines.length === 1 && leftLines.length > 1) {
-    leftLines = packRow(left, leftWidth, separator, more, MAX_LINES_PER_ROW, width);
-  } else if (leftLines.length === 1 && rightLines.length > 1) {
-    rightLines = packRow(right, rightWidth, separator, more, MAX_LINES_PER_ROW, width);
+  let leftLines = packRow(left, leftWidth, separator);
+  let rightLines = packRow(right, rightWidth, separator);
+  if (rightLines.length < leftLines.length) {
+    leftLines = packRow(left, leftWidth, separator, line => line >= rightLines.length ? width : leftWidth);
+  } else if (leftLines.length < rightLines.length) {
+    rightLines = packRow(right, rightWidth, separator, line => line >= leftLines.length ? width : rightWidth);
   }
   return Array.from({ length: Math.max(leftLines.length, rightLines.length) }, (_, index) => {
     const l = leftLines[index] ?? '';
@@ -277,15 +274,13 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
   });
 }
 
-/** Render footer lines. Every line fits `width`; each configured row wraps to at most two lines. */
+/** Render all configured rows and wrapped modules, keeping every line within `width`. */
 export function renderStatusLine(data: StatusSnapshot, config: StatusLineConfig, theme: Theme, width: number): string[] {
   if (width <= 0) return [];
-  const painter = createPainter(theme, config.colorMode);
   const separator = ITEM_GAP;
-  const more = (count: number) => painter.paint('label', `+${count}`);
   const lines: string[] = [];
   for (const segments of renderSegments(data, config, theme).values()) {
-    if (segments.length) lines.push(...alignRow(segments, width, separator, more));
+    if (segments.length) lines.push(...alignRow(segments, width, separator));
   }
   return lines.map(line => {
     const fitted = visibleWidth(line) > width ? truncateToWidth(line, width, '') : line;

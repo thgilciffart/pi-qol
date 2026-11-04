@@ -36,7 +36,10 @@ describe('status line settings', () => {
       [{ items: [{ id: 'separator:abc' }] }, /not a built-in module/],
       [{ items: [{ id: 'separator:1' }, { id: 'separator:1' }] }, /more than once/],
       [{ items: [{ id: 'model' }, { id: 'model' }] }, /more than once/],
-      [{ items: [{ id: 'model', row: 3 }] }, /row must be 1 or 2/],
+      [{ items: [{ id: 'model', row: 0 }] }, /positive safe integer/],
+      [{ items: [{ id: 'model', row: -1 }] }, /positive safe integer/],
+      [{ items: [{ id: 'model', row: 1.5 }] }, /positive safe integer/],
+      [{ items: [{ id: 'model', row: Number.MAX_SAFE_INTEGER + 1 }] }, /positive safe integer/],
       [{ items: [{ id: 'model', side: 'center' }] }, /side must be "left" or "right"/],
       [{ items: [{ id: 'model', side: null }] }, /side must be "left" or "right"/],
       [{ items: [{ id: 'model', enabled: 1 }] }, /enabled must be true or false/],
@@ -140,6 +143,18 @@ describe('status line settings', () => {
       await saveConfig(path, config);
       expect(await loadConfig(path)).toEqual({ status: 'ok', config });
       expect(resolveItems(config, ['plugin']).filter(item => item.id.startsWith('separator:'))).toHaveLength(2);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+
+  test('saves arbitrary positive row numbers without creating empty rows', async () => {
+    const dir = await tempDir();
+    try {
+      const config = defaultConfig();
+      config.items.forEach((item, index) => { item.row = index + 3; });
+      config.items.push({ id: 'separator:1', row: 1000, side: 'right', enabled: true });
+      const path = join(dir, 'status-line.json');
+      await saveConfig(path, config);
+      expect(await loadConfig(path)).toEqual({ status: 'ok', config });
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });

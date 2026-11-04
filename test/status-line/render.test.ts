@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { defaultConfig, type StatusLineConfig } from '../../src/status-line/config.ts';
-import { formatCwd, renderStatusLine, sanitizeInline } from '../../src/status-line/render.ts';
+import { formatCwd, formatTokens, renderStatusLine, sanitizeInline } from '../../src/status-line/render.ts';
 import { fakeTheme, snapshot, strip } from './helpers.ts';
 
 function config(overrides: Partial<StatusLineConfig> = {}): StatusLineConfig {
@@ -30,6 +30,48 @@ describe('sanitizeInline', () => {
 });
 
 describe('renderStatusLine', () => {
+  test('formats billions of cache, input, and output tokens with B', () => {
+    expect(formatTokens(1_000_000)).toBe('1.0M');
+    expect(formatTokens(1_000_000_000)).toBe('1.0B');
+    expect(formatTokens(1_200_000_000)).toBe('1.2B');
+    expect(formatTokens(12_000_000_000)).toBe('12B');
+    const data = snapshot({ usage: { input: 2_000_000_000, output: 1_000_000_000,
+      cacheRead: 1_200_000_000, cacheWrite: 2_500_000_000, cost: 0 } });
+    const text = renderStatusLine(data, config({ colorMode: 'mono' }), fakeTheme().theme, 200).join('\n');
+    expect(text).toContain('↑2.0B ↓1.0B');
+    expect(text).toContain('cache R1.2B W2.5B');
+  });
+
+  test('renders all populated rows in numeric order, including sparse high row numbers', () => {
+    const cfg = config({ colorMode: 'mono', showNewExtensionStatuses: false });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    const statuses = new Map<string, string>();
+    for (let row = 20; row >= 1; row--) {
+      cfg.items.push({ id: `extension:row-${row}`, enabled: true, row, side: row % 2 ? 'left' : 'right' });
+      statuses.set(`row-${row}`, `row ${row}`);
+    }
+    cfg.items.push({ id: 'extension:last', row: 1000, enabled: true });
+    statuses.set('last', 'last row');
+    const lines = renderStatusLine(snapshot({ extensionStatuses: statuses }), cfg, fakeTheme().theme, 40);
+    expect(lines.map(line => line.trim())).toEqual([...Array.from({ length: 20 }, (_, i) => `row ${i + 1}`), 'last row']);
+    expect(lines[1]).toBe(' '.repeat(35) + 'row 2');
+  });
+
+  test('wraps every left and right module even beyond four physical lines', () => {
+    const cfg = config({ colorMode: 'mono' });
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    const statuses = new Map<string, string>();
+    for (let i = 0; i < 30; i++) {
+      cfg.items.push({ id: `extension:${i}`, row: 1, side: i % 2 ? 'right' : 'left', enabled: true });
+      statuses.set(String(i), `item-${String(i).padStart(2, '0')}`);
+    }
+    const lines = renderStatusLine(snapshot({ extensionStatuses: statuses }), cfg, fakeTheme().theme, 20);
+    expect(lines.length).toBeGreaterThan(4);
+    for (const value of statuses.values()) expect(lines.join('\n')).toContain(value);
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(20);
+    expect(lines.join('\n')).not.toMatch(/\+\d+/);
+  });
+
   test('default layout shows two rows with real data and no fake information', () => {
     const { theme } = fakeTheme();
     const lines = renderStatusLine(snapshot(), config(), theme, 200).map(strip);
@@ -79,7 +121,7 @@ describe('renderStatusLine', () => {
     });
     for (const width of [10, 40, 200]) {
       const lines = renderStatusLine(data, config(), theme, width);
-      expect(lines.length).toBeLessThanOrEqual(4);
+      expect(lines.length).toBeLessThanOrEqual(config().items.length + data.extensionStatuses.size);
       for (const line of lines) {
         expect(line).not.toMatch(/[\n\r\x07]/);
         expect(line.replace(/\x1b\[[0-9;:]*m/g, '')).not.toContain('\x1b');
@@ -100,17 +142,19 @@ describe('renderStatusLine', () => {
       for (let width = 1; width <= 120; width++) {
         const lines = renderStatusLine(data, config({ colorMode: mode }), theme, width);
         for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-        expect(lines.length).toBeLessThanOrEqual(4);
+        expect(lines.length).toBeLessThanOrEqual(config().items.length + data.extensionStatuses.size);
       }
     }
     expect(renderStatusLine(data, config(), theme, 0)).toEqual([]);
   });
 
-  test('wraps a row at module boundaries and marks overflow', () => {
+  test('wraps every module without an overflow limit', () => {
     const { theme } = fakeTheme();
     const lines = renderStatusLine(snapshot(), config(), theme, 30).map(strip);
-    expect(lines.length).toBe(4);
-    expect(lines.some(line => /\+\d+$/.test(line))).toBe(true);
+    expect(lines.length).toBeGreaterThan(4);
+    expect(lines.some(line => /\+\d+$/.test(line))).toBe(false);
+    expect(lines.join(' ')).toContain('“Fix footer”');
+    expect(lines.join(' ')).toContain('$0.250');
   });
 
   test('omits modules without data and respects disabled items', () => {
@@ -202,7 +246,7 @@ describe('renderStatusLine', () => {
       cfg.colorMode = mode;
       for (let width = 1; width <= 120; width++) {
         const lines = renderStatusLine(data, cfg, fakeTheme().theme, width);
-        expect(lines.length).toBeLessThanOrEqual(4);
+        expect(lines.length).toBeLessThanOrEqual(config().items.length + data.extensionStatuses.size);
         for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
         if (mode === 'mono') expect(lines.join('')).not.toContain('\x1b');
       }

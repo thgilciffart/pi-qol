@@ -21,7 +21,7 @@ The `color` and `colour` forms require a mode. Other actions, such as `on` and `
 
 ## Editor keys
 
-The editor has a live preview and a sample preview. Changes remain in the draft until saved. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.
+The editor has a live preview and a sample preview. Long previews show a window of lines that follows the selected row so the controls remain visible. Changes remain in the draft until saved. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.
 
 If saved settings change while the editor is open, the save reports a conflict and leaves the file unchanged. Reopening the editor loads the latest settings.
 
@@ -31,9 +31,10 @@ If saved settings change while the editor is open, the save reports a conflict a
 | Home or End | Selects the first or last item. |
 | Page Up or Page Down | Moves the selection by one page. |
 | Space | Toggles a module or changes the selected setting. |
-| Shift+Up or Shift+Down, Alt+Up or Alt+Down, `[` or `]` | Moves the selected module earlier or later within its side. Crossing a row boundary moves it into the other row on the same side. |
+| Shift+Up or Shift+Down, Alt+Up or Alt+Down, `[` or `]` | Moves the selected module earlier or later within its side. Crossing a row boundary moves it to the previous or next row on the same side. |
 | Left or Right | Assigns the selected module to the left or right side. |
-| `1` or `2` | Assigns the selected module to row 1 or row 2. |
+| `1` through `9` | Assigns the selected module to that row. |
+| `+` or `-` | Moves the selected module to the next or previous row, including rows above 9. `=` also moves to the next row. |
 | `s` | Adds a separator item after the selected item, on the same row and side. |
 | Delete or Backspace | Removes the selected separator item. |
 | `c` | Cycles the colour mode. |
@@ -45,9 +46,9 @@ If saved settings change while the editor is open, the save reports a conflict a
 
 ## Modules
 
-Each module can be enabled, disabled, reordered, or assigned to either side of the first or second row. The editor groups modules by row and side. Within each side, list order determines display order from left to right. A right group ends at the terminal's right edge, with empty space between the two groups.
+Each module can be enabled, disabled, reordered, or assigned to either side of any positive-numbered row. The editor groups modules by row and side. Within each side, list order determines display order from left to right. A right group ends at the terminal's right edge, with empty space between the two groups.
 
-Empty values do not occupy space. Each side wraps between modules onto at most two terminal lines. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. A continuation line uses the full width when the opposite side has no content on that line. Overflow displays `+N` for the remaining modules. Every line fits the terminal width. A one-column terminal stacks the two sides.
+Empty values do not occupy space. Rows have no fixed count limit and appear in numeric order. Empty row numbers add no blank lines. Each side wraps between modules onto as many terminal lines as needed, with no overflow cutoff. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. Continuation lines use the full width after the opposite side runs out of content. Every line fits the terminal width. A one-column terminal stacks the two sides.
 
 By default, row 1 contains ready or working, model, thinking level, working directory, branch, and session name. Row 2 contains context remaining, token usage, cache usage, cost, and external statuses. Modules start on the left. Existing settings retain their layout until a module moves to the right.
 
@@ -65,6 +66,8 @@ Modules use spaces between values. There are no automatic dot separators. The op
 | Token usage | Cumulative session input and output tokens. |
 | Cache reads/writes | Cumulative session cache usage. |
 | Cost | Cumulative session cost from Pi's usage records, with `(sub)` when Pi reports OAuth authentication. |
+
+Token and cache counts use `k` for thousands, `M` for millions, and `B` for billions. For example, 1,200,000,000 cache-read tokens display as `R1.2B`.
 
 Account quotas and permission settings are not available as built-in modules. A plugin can publish those values as external status text.
 
@@ -96,7 +99,7 @@ Settings apply across chats and are stored in `<agent directory>/pi-qol/status-l
 
 Each command re-reads saved settings, including manual repairs and changes saved by another Pi process.
 
-The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to `1` or `2`. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
+The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to a positive safe integer. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
 
 Built-in IDs are `state`, `model`, `thinking`, `cwd`, `git`, `session`, `context`, `tokens`, `cache`, and `cost`. External status IDs use `extension:<key>`. Missing built-in entries receive their default settings. Disabling a built-in module requires an entry with `enabled` set to `false`.
 

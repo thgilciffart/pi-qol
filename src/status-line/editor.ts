@@ -23,13 +23,12 @@ const COLOR_LABELS: Record<StatusLineConfig['colorMode'], string> = {
 };
 
 export const EDITOR_HINTS = [
-  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1/2 row', 's add separator', 'Del remove separator', 'c colour', 'p preview',
+  '↑↓ select', 'Space toggle', 'Shift+↑↓ or [ ] reorder', '←→ side', '1–9 row', '+/- row', 's add separator', 'Del remove separator', 'c colour', 'p preview',
   'r reset', 'Enter/Ctrl+S save', 'Esc cancel',
 ];
 
 function sortByPlacement(items: StatusLineItem[]): StatusLineItem[] {
-  return [1, 2].flatMap(row => (['left', 'right'] as const).flatMap(side =>
-    items.filter(item => item.row === row && (item.side ?? 'left') === side)));
+  return [...items].sort((a, b) => a.row - b.row || Number(a.side === 'right') - Number(b.side === 'right'));
 }
 
 export class StatusLineEditor implements Component {
@@ -119,16 +118,16 @@ export class StatusLineEditor implements Component {
       items[index] = neighbour;
       items[index + direction] = item;
       this.cursor += direction;
-    } else if (direction === -1 && item.row === 2) item.row = 1;
-    else if (direction === 1 && item.row === 1) item.row = 2;
+    } else item.row = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, item.row + direction));
     this.draft.items = sortByPlacement(items);
     this.cursor = SETTINGS.length + this.draft.items.indexOf(item);
   }
 
-  private setRow(row: 1 | 2): void {
+  private setRow(row: number): void {
     const index = this.cursor - SETTINGS.length;
     if (index < 0) return;
     const item = this.draft.items[index]!;
+    row = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, row));
     if (item.row === row) return;
     item.row = row;
     this.draft.items = sortByPlacement(this.draft.items);
@@ -195,8 +194,9 @@ export class StatusLineEditor implements Component {
     else if (matchesKey(data, Key.pageDown)) this.cursor = Math.min(this.rowCount - 1, this.cursor + this.pageSize);
     else if (matchesKey(data, Key.left)) this.setSide('left');
     else if (matchesKey(data, Key.right)) this.setSide('right');
-    else if (printable === '1') this.setRow(1);
-    else if (printable === '2') this.setRow(2);
+    else if (/^[1-9]$/.test(printable)) this.setRow(Number(printable));
+    else if (printable === '+' || printable === '=') this.setRow((this.draft.items[this.cursor - SETTINGS.length]?.row ?? 1) + 1);
+    else if (printable === '-') this.setRow((this.draft.items[this.cursor - SETTINGS.length]?.row ?? 1) - 1);
     else if (printable === 's') this.addSeparator();
     else if (matchesKey(data, Key.delete) || matchesKey(data, Key.backspace)) this.removeSeparator();
     else if (matchesKey(data, Key.space) || data === ' ') this.toggle();
@@ -252,7 +252,13 @@ export class StatusLineEditor implements Component {
     add(t.fg('muted', `Preview (${label}) · p toggles live/sample`));
     if (this.draft.enabled) {
       const preview = renderStatusLine(data, this.draft, t, inner);
-      for (const line of preview.length ? preview : [t.fg('muted', '(no modules have data to show)')]) add(line);
+      const previewLimit = Math.max(1, Math.min(4, Math.floor((this.tui.terminal?.rows ?? 40) / 8)));
+      const selectedRow = this.draft.items[this.cursor - SETTINGS.length]?.row ?? 1;
+      const before = renderStatusLine(data, { ...this.draft, items: this.draft.items.filter(item => item.row < selectedRow),
+        showNewExtensionStatuses: false }, t, inner).length;
+      const start = Math.max(0, Math.min(before, preview.length - previewLimit));
+      for (const line of preview.length ? preview.slice(start, start + previewLimit) : [t.fg('muted', '(no modules have data to show)')]) add(line);
+      if (preview.length > previewLimit) add(t.fg('muted', `Preview lines ${start + 1}–${Math.min(start + previewLimit, preview.length)} of ${preview.length}`));
     } else add(t.fg('warning', 'Custom footer off. Pi\'s built-in footer is used.'));
     add();
 
@@ -275,7 +281,7 @@ export class StatusLineEditor implements Component {
     // Leave room for Pi's footer and space around the custom editor on short terminals.
     const height = this.tui.terminal ? Math.max(1, this.tui.terminal.rows - 5) : Infinity;
     const groups = new Set(this.draft.items.map(item => `${item.row}:${item.side ?? 'left'}`)).size;
-    const reserved = hints.length + 3 + groups + Number(Boolean(this.notice)) + Number(!this.options.discoveryAvailable);
+    const reserved = hints.length + 3 + Math.min(groups, MAX_VISIBLE_ITEMS) + Number(Boolean(this.notice)) + Number(!this.options.discoveryAvailable);
     this.pageSize = Math.max(1, Math.min(MAX_VISIBLE_ITEMS, height - lines.length - reserved));
     const start = Math.max(0, Math.min(total - this.pageSize, itemIndex - Math.floor(this.pageSize / 2)));
     const end = Math.min(total, start + this.pageSize);

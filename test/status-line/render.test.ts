@@ -208,4 +208,28 @@ describe('renderStatusLine', () => {
       }
     }
   });
+
+  test('uses the full continuation line when the opposite side has no content there', () => {
+    const cfg = config({ colorMode: 'mono' });
+    cfg.items.forEach(item => { if (['model', 'context', 'cost'].includes(item.id)) item.side = 'right'; });
+    cfg.items.push({ id: 'extension:mcp', row: 1, side: 'right', enabled: true });
+    const data = snapshot({ extensionStatuses: new Map([['mcp', 'MCP 界界 3 servers']]) });
+    const lines = renderStatusLine(data, cfg, fakeTheme().theme, 60);
+    expect(lines[0]).toEndWith('gpt-test · MCP 界界 3 servers');
+    expect(lines[1]).toContain('~/work/app · ⎇ main · “Fix footer”');
+    expect(lines[1]).not.toContain('+1');
+
+    cfg.items = cfg.items.map(item => ({ ...item, enabled: false }));
+    cfg.items.push({ id: 'extension:left', enabled: true, row: 1 });
+    const statuses = new Map([['left', 'L'.repeat(20)]]);
+    for (let i = 1; i <= 5; i++) {
+      cfg.items.push({ id: `extension:r${i}`, enabled: true, row: 1, side: 'right' });
+      statuses.set(`r${i}`, String(i).repeat(15));
+    }
+    const rightLines = renderStatusLine(snapshot({ extensionStatuses: statuses }), cfg, fakeTheme().theme, 60);
+    expect(rightLines).toHaveLength(2);
+    expect(rightLines[1]).toEndWith('3'.repeat(15) + ' · ' + '4'.repeat(15) + ' · ' + '5'.repeat(15));
+    expect(rightLines[1]).not.toContain('+1');
+    for (const line of [...lines, ...rightLines]) expect(visibleWidth(line)).toBeLessThanOrEqual(60);
+  });
 });

@@ -41,6 +41,8 @@ export class StatusLineEditor implements Component {
   private cancelArmed = false;
   private closed = false;
   private pageSize = MAX_VISIBLE_ITEMS;
+  private knownIds: Set<string>;
+  private readonly visibilityOverrides = new Set<string>();
 
   constructor(
     private readonly tui: Pick<TUI, 'requestRender'> & { terminal?: Pick<TUI['terminal'], 'rows'> },
@@ -48,6 +50,7 @@ export class StatusLineEditor implements Component {
     private readonly options: StatusLineEditorOptions,
     private readonly done: (result: StatusLineConfig | undefined) => void,
   ) {
+    this.knownIds = new Set(options.config.items.map(item => item.id));
     this.draft = this.withPresentKeys(cloneConfig(options.config));
     this.initial = JSON.stringify(this.draft);
   }
@@ -57,7 +60,13 @@ export class StatusLineEditor implements Component {
   }
 
   private withPresentKeys(config: StatusLineConfig): StatusLineConfig {
-    return { ...config, items: sortByPlacement(resolveItems(config, this.presentStatuses().keys())) };
+    const items = resolveItems(config, this.presentStatuses().keys());
+    for (const item of items) {
+      if (extensionKey(item.id) !== undefined && !this.knownIds.has(item.id) && !this.visibilityOverrides.has(item.id)) {
+        item.enabled = config.showNewExtensionStatuses;
+      }
+    }
+    return { ...config, items: sortByPlacement(items) };
   }
 
   private refreshPresentKeys(): void {
@@ -84,11 +93,15 @@ export class StatusLineEditor implements Component {
       const setting = SETTINGS[this.cursor]!;
       if (setting === 'enabled') this.draft.enabled = !this.draft.enabled;
       else if (setting === 'colorMode') this.cycleColor();
-      else this.draft.showNewExtensionStatuses = !this.draft.showNewExtensionStatuses;
+      else {
+        this.draft.showNewExtensionStatuses = !this.draft.showNewExtensionStatuses;
+        this.draft = this.withPresentKeys(this.draft);
+      }
       return;
     }
     const item = this.draft.items[this.cursor - SETTINGS.length]!;
     item.enabled = !item.enabled;
+    this.visibilityOverrides.add(item.id);
   }
 
   private cycleColor(): void {
@@ -163,6 +176,8 @@ export class StatusLineEditor implements Component {
     else if (printable === 'c') this.cycleColor();
     else if (printable === 'p') this.preview = this.preview === 'live' ? 'sample' : 'live';
     else if (printable === 'r') {
+      this.knownIds = new Set(defaultConfig().items.map(item => item.id));
+      this.visibilityOverrides.clear();
       this.draft = this.withPresentKeys(defaultConfig());
       this.cursor = Math.min(this.cursor, this.rowCount - 1);
       this.say('Defaults restored in the editor. Enter saves, Esc discards.');

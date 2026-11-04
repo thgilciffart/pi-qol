@@ -21,6 +21,8 @@ The custom status line is enabled by default in Pi's terminal UI. It displays se
 
 The editor has a live preview and a sample preview. Changes remain in the draft until saved. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.
 
+If saved settings change while the editor is open, the save reports a conflict and leaves the file unchanged. Reopening the editor loads the latest settings.
+
 | Key | Behavior |
 | --- | --- |
 | Up or Down, `j` or `k` | Moves the selection. |
@@ -41,7 +43,7 @@ The editor has a live preview and a sample preview. Changes remain in the draft 
 
 Each module can be enabled, disabled, reordered, or assigned to either side of the first or second row. The editor groups modules by row and side. Within each side, list order determines display order from left to right. A right group ends at the terminal's right edge, with empty space between the two groups.
 
-Empty values do not occupy space. Each side wraps between modules onto at most two terminal lines. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. Overflow displays `+N` for the remaining modules. Every line fits the terminal width. A one-column terminal stacks the two sides.
+Empty values do not occupy space. Each side wraps between modules onto at most two terminal lines. When both sides have content, the renderer divides the available width between them. A short group leaves more room for the other side. A continuation line uses the full width when the opposite side has no content on that line. Overflow displays `+N` for the remaining modules. Every line fits the terminal width. A one-column terminal stacks the two sides.
 
 By default, row 1 contains ready or working, model, thinking level, working directory, branch, and session name. Row 2 contains context remaining, token usage, cache usage, cost, and external statuses. Modules start on the left. Existing settings retain their layout until a module moves to the right.
 
@@ -76,6 +78,8 @@ An external module appears when its plugin publishes a status. A plugin can publ
 
 Discovery runs while the pi-qol footer is mounted, including while the editor is open. With the custom footer off, the editor retains saved keys but cannot discover new ones.
 
+The new-status visibility setting applies to all keys not yet listed in saved settings, including keys present when the editor opens. Explicitly toggling a key overrides that policy for the key. Previously saved visibility choices stay unchanged.
+
 External status text retains its ANSI colours in colour modes. Monochrome removes those colours. The renderer removes terminal control sequences and flattens multiline text to fit the footer.
 
 Pi has one custom footer slot. If another plugin calls `setFooter`, the latest call determines which footer appears. `/status-line on` installs the pi-qol footer again. `/status-line off` restores Pi's built-in footer when pi-qol owns the footer. It leaves a footer installed by another plugin in place.
@@ -83,6 +87,8 @@ Pi has one custom footer slot. If another plugin calls `setFooter`, the latest c
 ## Settings
 
 Settings apply across chats and are stored in `<agent directory>/pi-qol/status-line.json`, normally `~/.pi/agent/pi-qol/status-line.json`.
+
+Each command re-reads saved settings, including manual repairs and changes saved by another Pi process.
 
 The JSON fields are `version`, `enabled`, `colorMode`, `showNewExtensionStatuses`, and `items`. Version is `1`. Each item contains an `id`, an `enabled` boolean, and `row` set to `1` or `2`. The optional `side` field is `left` or `right` and defaults to `left`. Array order determines module order within each row and side.
 

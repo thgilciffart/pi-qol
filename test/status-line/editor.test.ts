@@ -226,6 +226,34 @@ describe('status line editor', () => {
     expect(h.renders()).toBe(1);
   });
 
+  test('the new-status policy immediately updates unlisted keys already present in the editor', () => {
+    const statuses = new Map([['new-plugin', 'NEW STATUS']]);
+    const h = mount(defaultConfig(), statuses);
+    expect(h.editor.render(200).slice(3, 5).map(strip).join('\n')).toContain('NEW STATUS');
+    h.press(DOWN, DOWN, ' ');
+    expect(h.editor.render(200).slice(3, 5).map(strip).join('\n')).not.toContain('NEW STATUS');
+    statuses.set('later-plugin', 'LATER STATUS');
+    h.text();
+    h.press(ENTER);
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.showNewExtensionStatuses).toBe(false);
+    expect(saved.items.filter(item => item.id.startsWith('extension:')).map(item => item.enabled)).toEqual([false, false]);
+  });
+
+  test('the new-status policy preserves saved visibility choices and explicit toggles during the visit', () => {
+    const config = defaultConfig();
+    config.items.push({ id: 'extension:shown', row: 2, enabled: true }, { id: 'extension:hidden', row: 2, enabled: false });
+    const h = mount(config, new Map([['shown', 'shown'], ['hidden', 'hidden'], ['new', 'new']]));
+    h.press(DOWN, DOWN, ' '); // new statuses hidden
+    h.press('\x1b[F', ' '); // explicitly show the new key
+    h.press('\x1b[H', DOWN, DOWN, ' ', ' ', ENTER); // change the policy twice
+    const saved = h.result() as StatusLineConfig;
+    expect(saved.showNewExtensionStatuses).toBe(false);
+    expect(saved.items.find(item => item.id === 'extension:shown')?.enabled).toBe(true);
+    expect(saved.items.find(item => item.id === 'extension:hidden')?.enabled).toBe(false);
+    expect(saved.items.find(item => item.id === 'extension:new')?.enabled).toBe(true);
+  });
+
   test('reduces the list height to keep the preview and controls visible on a 24-row terminal', () => {
     const terminal = { rows: 24 };
     const editor = new StatusLineEditor({ requestRender() {}, terminal }, fakeTheme().theme, {

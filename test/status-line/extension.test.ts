@@ -86,9 +86,9 @@ async function until<T>(read: () => T): Promise<NonNullable<T>> {
   throw new Error('Timed out waiting for the editor.');
 }
 
-async function harness(configContent?: string) {
+async function harness(configContent?: string, sharedConfigPath?: string) {
   const dir = await mkdtemp(join(tmpdir(), 'pi-qol-status-ext-'));
-  const configPath = join(dir, 'pi-qol', 'status-line.json');
+  const configPath = sharedConfigPath ?? join(dir, 'pi-qol', 'status-line.json');
   if (configContent !== undefined) {
     await import('node:fs/promises').then(fs => fs.mkdir(join(dir, 'pi-qol'), { recursive: true }));
     await writeFile(configPath, configContent);
@@ -256,6 +256,81 @@ describe('status line extension', () => {
       await opened;
       expect(c.notices.at(-1)?.[0]).toContain('discarded');
       await expect(readFile(h.configPath, 'utf8')).rejects.toThrow();
+    } finally { await h.cleanup(); }
+  });
+
+  test('uses repaired settings on the next command and editor visit without backing up a valid file as invalid', async () => {
+    const h = await harness('{invalid');
+    try {
+      const c = context();
+      await h.emit('session_start', c.ctx);
+      const repaired = defaultConfig();
+      repaired.items.find(item => item.id === 'model')!.side = 'right';
+      repaired.items.find(item => item.id === 'cost')!.enabled = false;
+      await writeFile(h.configPath, JSON.stringify(repaired));
+      await h.run('mono', c.ctx);
+      expect(await h.saved()).toEqual({ ...repaired, colorMode: 'mono' });
+      expect((await readdir(join(h.dir, 'pi-qol'))).some(name => name.includes('.invalid-'))).toBe(false);
+
+      repaired.items.find(item => item.id === 'thinking')!.side = 'right';
+      await writeFile(h.configPath, JSON.stringify(repaired));
+      const opened = h.run('', c.ctx);
+      const editor = await until(c.editor);
+      expect(editor.render(200).map(strip).join('\n')).toContain('Row 1 · Right');
+      editor.handleInput('\r');
+      await opened;
+      expect((await h.saved()).items.find((item: any) => item.id === 'thinking').side).toBe('right');
+      expect((await h.saved()).items.find((item: any) => item.id === 'cost').enabled).toBe(false);
+      await h.emit('session_shutdown', c.ctx);
+    } finally { await h.cleanup(); }
+  });
+
+  test('commands in separate extension instances preserve each other\'s saved layout and settings', async () => {
+    const first = await harness(JSON.stringify(defaultConfig()));
+    const second = await harness(undefined, first.configPath);
+    try {
+      const a = context();
+      const b = context();
+      await first.emit('session_start', a.ctx);
+      await second.emit('session_start', b.ctx);
+      const opened = first.run('', a.ctx);
+      const editor = await until(a.editor);
+      for (let i = 0; i < 4; i++) editor.handleInput('\x1b[B'); // model
+      editor.handleInput('\x1b[C'); // right
+      editor.handleInput('\x1b[F'); // cost
+      editor.handleInput(' '); // hidden
+      editor.handleInput('\r');
+      await opened;
+      await second.run('mono', b.ctx);
+      await second.run('off', b.ctx);
+      await first.run('on', a.ctx);
+      const saved = await first.saved();
+      expect(saved.colorMode).toBe('mono');
+      expect(saved.enabled).toBe(true);
+      expect(saved.items.find((item: any) => item.id === 'model').side).toBe('right');
+      expect(saved.items.find((item: any) => item.id === 'cost').enabled).toBe(false);
+      await first.emit('session_shutdown', a.ctx);
+      await second.emit('session_shutdown', b.ctx);
+    } finally { await second.cleanup(); await first.cleanup(); }
+  });
+
+  test('refuses a stale editor save when the settings file changed while it was open', async () => {
+    const h = await harness(JSON.stringify(defaultConfig()));
+    try {
+      const c = context();
+      await h.emit('session_start', c.ctx);
+      const opened = h.run('', c.ctx);
+      const editor = await until(c.editor);
+      editor.handleInput('c');
+      const latest = defaultConfig();
+      latest.items.find(item => item.id === 'model')!.side = 'right';
+      const contents = JSON.stringify(latest);
+      await writeFile(h.configPath, contents);
+      editor.handleInput('\r');
+      await opened;
+      expect(await readFile(h.configPath, 'utf8')).toBe(contents);
+      expect(c.notices.at(-1)).toEqual([expect.stringContaining('Settings changed while the editor was open'), 'error']);
+      await h.emit('session_shutdown', c.ctx);
     } finally { await h.cleanup(); }
   });
 

@@ -248,17 +248,18 @@ export function renderSegments(data: StatusSnapshot, config: StatusLineConfig, t
 }
 
 function packRow(segments: RenderedSegment[], width: number, separator: string, more: (count: number) => string,
-  maxLines = MAX_LINES_PER_ROW): string[] {
+  maxLines = MAX_LINES_PER_ROW, nextLineWidth = width): string[] {
   const lines: string[] = [];
   const sepWidth = visibleWidth(separator);
   let line = '';
   let lineWidth = 0;
+  let lineLimit = width;
+  const fit = (text: string) => visibleWidth(text) > lineLimit ? truncateToWidth(text, lineLimit, '…') : text;
   let index = 0;
   for (; index < segments.length; index++) {
-    let text = segments[index]!.text;
+    let text = fit(segments[index]!.text);
     let textWidth = visibleWidth(text);
-    if (textWidth > width) { text = truncateToWidth(text, width, '…'); textWidth = visibleWidth(text); }
-    if (line && lineWidth + sepWidth + textWidth <= width) {
+    if (line && lineWidth + sepWidth + textWidth <= lineLimit) {
       line += separator + text;
       lineWidth += sepWidth + textWidth;
       continue;
@@ -266,6 +267,9 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
     if (line) {
       if (lines.length + 1 >= maxLines) break;
       lines.push(line);
+      lineLimit = nextLineWidth;
+      text = fit(segments[index]!.text);
+      textWidth = visibleWidth(text);
     }
     line = text;
     lineWidth = textWidth;
@@ -274,10 +278,13 @@ function packRow(segments: RenderedSegment[], width: number, separator: string, 
   if (remaining > 0) {
     const marker = more(remaining);
     const markerWidth = visibleWidth(marker) + 1;
-    line = lineWidth + markerWidth <= width ? `${line} ${marker}` : `${truncateToWidth(line, Math.max(0, width - markerWidth), '…')} ${marker}`;
+    line = lineWidth + markerWidth <= lineLimit ? `${line} ${marker}` : `${truncateToWidth(line, Math.max(0, lineLimit - markerWidth), '…')} ${marker}`;
   }
   if (line) lines.push(line);
-  return lines.map(line => visibleWidth(line) > width ? truncateToWidth(line, width, '') : line);
+  return lines.map((line, index) => {
+    const limit = index === 0 ? width : nextLineWidth;
+    return visibleWidth(line) > limit ? truncateToWidth(line, limit, '') : line;
+  });
 }
 
 /** Keep each side in configured order and anchor the right group to the terminal edge. */
@@ -295,8 +302,13 @@ function alignRow(segments: RenderedSegment[], width: number, separator: string,
   const needed = (group: RenderedSegment[]) => visibleWidth(group.map(segment => segment.text).join(separator));
   const leftWidth = Math.min(needed(left), Math.max(1, available - Math.min(needed(right), Math.floor(available / 2))));
   const rightWidth = available - leftWidth;
-  const leftLines = packRow(left, leftWidth, separator, more);
-  const rightLines = packRow(right, rightWidth, separator, more);
+  let leftLines = packRow(left, leftWidth, separator, more);
+  let rightLines = packRow(right, rightWidth, separator, more);
+  if (rightLines.length === 1 && leftLines.length > 1) {
+    leftLines = packRow(left, leftWidth, separator, more, MAX_LINES_PER_ROW, width);
+  } else if (leftLines.length === 1 && rightLines.length > 1) {
+    rightLines = packRow(right, rightWidth, separator, more, MAX_LINES_PER_ROW, width);
+  }
   return Array.from({ length: Math.max(leftLines.length, rightLines.length) }, (_, index) => {
     const l = leftLines[index] ?? '';
     const r = rightLines[index] ?? '';

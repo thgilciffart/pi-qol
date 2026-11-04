@@ -6,7 +6,7 @@ import {
 import type { Component, TUI } from '@earendil-works/pi-tui';
 import {
   COLOR_MODES, cloneConfig, defaultConfig, extensionKey, loadConfig, saveConfig,
-  type ColorMode, type LoadResult, type StatusLineConfig,
+  type ColorMode, type StatusLineConfig,
 } from './config.ts';
 import { StatusData } from './data.ts';
 import { StatusLineEditor } from './editor.ts';
@@ -39,9 +39,7 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
   const configPath = options.configPath ?? join(getAgentDir(), 'pi-qol', 'status-line.json');
   const data = new StatusData();
   let config = defaultConfig();
-  let loaded: LoadResult['status'] | undefined;
   let loadError: string | undefined;
-  let loading: Promise<void> | undefined;
   let errorReported = false;
   let activeCtx: ExtensionContext | undefined;
   let footer: StatusFooter | undefined;
@@ -76,12 +74,12 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
     }
   }
 
-  function load(): Promise<void> {
-    return loading ??= loadConfig(configPath).then(result => {
-      config = result.config;
-      loaded = result.status;
-      loadError = result.status === 'invalid' ? result.error : undefined;
-    });
+  async function load(): Promise<void> {
+    const result = await loadConfig(configPath);
+    const error = result.status === 'invalid' ? result.error : undefined;
+    if (loadError !== error) errorReported = false;
+    config = result.config;
+    loadError = error;
   }
 
   function reportLoadError(ctx: ExtensionContext): void {
@@ -101,24 +99,31 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
     ctx.ui.setFooter((tui, theme, footerData) => (footer = new StatusFooter(tui, theme, footerData)));
   }
 
-  async function persist(next: StatusLineConfig, ctx: ExtensionCommandContext): Promise<void> {
-    const backup = await saveConfig(configPath, next, { backupExisting: loaded === 'invalid' });
+  async function persist(update: (latest: StatusLineConfig) => StatusLineConfig, ctx: ExtensionCommandContext,
+    expected?: StatusLineConfig): Promise<void> {
+    // Another Pi process or a manual repair may have updated the shared file.
+    const current = await loadConfig(configPath);
+    if (expected && JSON.stringify(current.config) !== JSON.stringify(expected)) {
+      throw new Error('Settings changed while the editor was open. Your saved settings were kept. Open /status-line again to edit the latest layout.');
+    }
+    const next = update(cloneConfig(current.config));
+    const backup = await saveConfig(configPath, next, { backupExisting: current.status === 'invalid' });
     config = cloneConfig(next);
-    loaded = 'ok';
     loadError = undefined;
     if (backup) ctx.ui.notify(`Kept a copy of the previous invalid settings at ${backup}.`, 'info');
     apply(ctx);
   }
 
   async function openEditor(ctx: ExtensionCommandContext): Promise<void> {
+    const base = cloneConfig(config);
     const result = await ctx.ui.custom<StatusLineConfig | undefined>((tui, theme, _keybindings, done) =>
       new StatusLineEditor(tui, theme, {
-        config,
+        config: base,
         liveSnapshot: () => data.snapshot(ctx, pi, footer?.footerData),
         discoveryAvailable: footer !== undefined,
       }, done));
     if (!result) { ctx.ui.notify('Status line changes discarded.', 'info'); return; }
-    await persist(result, ctx);
+    await persist(() => result, ctx, base);
     ctx.ui.notify(result.enabled ? 'Status line saved.' : 'Status line saved. The pi-qol footer is disabled.', 'info');
   }
 
@@ -129,28 +134,26 @@ export default function statusLine(pi: ExtensionAPI, options: StatusLineOptions 
       throw new Error('Too many arguments. Use /status-line [on|off|reset|status|colorful|theme|mono].');
     }
     if (action === 'reset') {
-      // Load first so a malformed file is backed up rather than overwritten. Loading never throws.
-      await load();
-      await persist(defaultConfig(), ctx);
+      await persist(() => defaultConfig(), ctx);
       ctx.ui.notify('Status line reset to defaults.', 'info');
       return;
     }
     await load();
     reportLoadError(ctx);
     if (!action) {
-      if (canMountFooter(ctx)) { await openEditor(ctx); return; }
+      if (canMountFooter(ctx)) { apply(ctx); await openEditor(ctx); return; }
       ctx.ui.notify(`${describe(config, configPath)}\nThe interactive editor needs the terminal UI.`, 'info');
       return;
     }
     if (action === 'status') { ctx.ui.notify(describe(config, configPath), 'info'); return; }
     if (action === 'on' || action === 'off') {
-      await persist({ ...cloneConfig(config), enabled: action === 'on' }, ctx);
+      await persist(latest => ({ ...latest, enabled: action === 'on' }), ctx);
       ctx.ui.notify(action === 'on' ? 'Status line on.' : 'Status line off. The pi-qol footer is disabled.', 'info');
       return;
     }
     const mode = COLOR_ALIASES[action];
     if (!mode) throw new Error(`Unknown option "${action}". Use on, off, reset, status, or a colour mode: ${COLOR_MODES.join(', ')}.`);
-    await persist({ ...cloneConfig(config), colorMode: mode }, ctx);
+    await persist(latest => ({ ...latest, colorMode: mode }), ctx);
     ctx.ui.notify(`Status line colour: ${mode}.`, 'info');
   }
 

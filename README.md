@@ -64,6 +64,16 @@ Send a prompt. Each final assistant reply has a row with separate input and outp
 
 See [statistics and command reference](docs/reference.md) for measurement definitions and limits.
 
+## Customise the status line
+
+Run `/status-line` to open the status line editor. Choose which modules appear, change their order, and preview the result before saving. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
+
+The editor also lists status text published by other plugins through Pi's `setStatus` API. New status keys appear automatically. Your choices persist across chats, including preferences for plugins that are temporarily inactive.
+
+Use `/status-line off` to restore Pi's built-in footer, or `/status-line on` to enable the custom footer again. Plugins that replace the entire footer compete for the same Pi API. Their internal modules need an integration before this editor can display them separately.
+
+See the [status line reference](docs/status-line.md) for controls, modules, and settings.
+
 ## Continue an interrupted turn
 
 If you accidentally press Escape, press **Ctrl+Alt+C** or run `/continue` to pick up the unfinished task. This starts a new model request with a hidden continuation cue, without adding a visible user message or clearing your editor draft.

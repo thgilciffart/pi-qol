@@ -7,6 +7,7 @@ import threads from './src/threads.ts';
 import autoName from './src/auto-name.ts';
 import continueTurn from './src/continue.ts';
 import thinking from './src/thinking.ts';
+import statusLine from './src/status-line/index.ts';
 
 export default function qol(pi: ExtensionAPI): void {
   ephemeral(pi);
@@ -17,4 +18,5 @@ export default function qol(pi: ExtensionAPI): void {
   autoName(pi);
   continueTurn(pi);
   thinking(pi);
+  statusLine(pi);
 }

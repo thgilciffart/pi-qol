@@ -7,6 +7,7 @@ Quality of life tools for [Pi](https://pi.dev), bundled in one extension.
 - [Answer interactive questions](#answer-questions) with single-choice, multiple-choice, and typed responses.
 - [Name new threads automatically](#name-threads) with a configurable model, effort, and prompt.
 - [Work toward a persistent goal](#work-toward-a-goal) across turns, with an optional token budget.
+- [Toggle installed Pi extensions](#toggle-plugins) with a searchable `/plugins` picker.
 - [See response statistics](docs/reference.md#response-statistics) for input and output tokens, tokens per second, time to first token, and cost in USD.
 - [Customise the status line](#customise-the-status-line) with colour and your choice of modules, including status text from other plugins.
 - [Continue interrupted work](#continue-interrupted-work) with `/continue` or Ctrl+Alt+C.
@@ -79,6 +80,16 @@ Use `/goal pause`, `/goal resume`, and `/goal clear` to control it. Use `/goal e
 Goals survive compaction and session restarts. Reopened sessions restore goals paused. Give directions to continue or run `/goal resume`.
 
 See the [goal reference](docs/goals.md) for commands, budget accounting, and continuation guards.
+
+## Toggle plugins
+
+Run `/plugins` to enable or disable installed Pi extensions. Type to search, use Up/Down to select an extension, and press Space to toggle it. Press Escape to close the picker and reload Pi with your changes.
+
+The picker opens global settings. Press Tab to switch to project settings, or run `/plugins project`. Project settings can enable, disable, or inherit a global extension. Pi must trust the project before you can change its settings.
+
+Plugin choices persist across sessions. The picker controls whole extensions, including their commands, tools, and event handlers. Features inside pi-qol remain bundled together.
+
+See the [plugin reference](docs/plugins.md) for scope behavior and reload details.
 
 ## Customise the status line
 

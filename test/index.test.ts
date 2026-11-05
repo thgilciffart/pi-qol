@@ -11,7 +11,7 @@ test('Pi loads the bundled extension and registers its commands, tools, and shor
   expect(result.extensions).toHaveLength(1);
   const extension = result.extensions[0];
 
-  for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name', 'continue', 'statusline']) {
+  for (const command of ['better-export', 'ephemeral', 'delete', 'delete-threads', 'goal', 'auto-name', 'continue', 'statusline', 'plugins']) {
     expect(extension.commands.has(command)).toBe(true);
   }
   for (const tool of ['get_goal', 'create_goal', 'update_goal', 'ask_user']) expect(extension.tools.has(tool)).toBe(true);

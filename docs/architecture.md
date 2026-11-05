@@ -8,6 +8,7 @@
 | --- | --- | --- | --- |
 | Goals | [`src/goal/index.ts`](../src/goal/index.ts) | `model.ts` defines persisted data and validation. `state.ts` defines transient run state. `commands.ts` parses commands, `prompts.ts` holds agent instructions, `format.ts` formats values, and `ui.ts` wraps the composer. | `/goal`, `create_goal`, `get_goal`, `update_goal` |
 | Automatic names | [`src/auto-name.ts`](../src/auto-name.ts) | [`auto-name-picker.ts`](../src/auto-name-picker.ts) adapts Pi's model selector. | `/auto-name` |
+| Plugins | [`src/plugins/index.ts`](../src/plugins/index.ts) | Discovers installed extensions, preserves configured discovery paths, saves Pi resource settings, and reloads. `native-picker.ts` adapts Pi's resource selector with extension-only lists. | `/plugins` |
 | Thread deletion | [`src/threads.ts`](../src/threads.ts) | [`thread-picker.ts`](../src/thread-picker.ts) owns the interactive list. [`threads/search.ts`](../src/threads/search.ts) defines searchable fields. | `/delete`, `/delete-threads` |
 | Ephemeral chats | [`src/ephemeral.ts`](../src/ephemeral.ts) | Contains the isolated adapter for Pi's private session-persistence fields. | `/ephemeral`, Alt+P |
 | Response statistics | [`src/metrics.ts`](../src/metrics.ts) | Computes per-response timing and renders persisted transcript entries. | Final assistant reply statistics |
@@ -32,6 +33,7 @@
 | Interrupted turns | Hidden request to continue an unfinished reply | `pi-qol-continue` custom messages |
 | Automatic names | Enabled state, model, effort, and naming prompt | `<agent directory>/pi-qol/auto-name.json` |
 | Status line | Visibility, colour mode, module order, row, and side | `<agent directory>/pi-qol/status-line.json` |
+| Plugins | Global extension filters and project overrides | Pi's global and project `settings.json` files |
 | Questionnaires | Completed or cancelled background answers delivered to the agent | `ask_user:answers` custom messages |
 
 Session entries retain their existing names and formats. Restoring a goal pauses it until fresh user direction. Ephemeral chats keep their entries in memory. Exports create files without changing the session history.
@@ -44,4 +46,4 @@ Session entries retain their existing names and formats. Restoring a goal pauses
 
 `npm pack --dry-run` checks package contents. Packaging includes `index.ts`, `src/`, `docs/`, the README, and the license. Tests and development dependencies are excluded.
 
-Pi compatibility adapters stay close to the feature that needs them. A Pi version change requires checking session persistence, the HTML template and exporter, theme helpers, editor wrapping, and footer APIs against the feature tests.
+Pi compatibility adapters stay close to the feature that needs them. A Pi version change requires checking session persistence, the HTML template and exporter, theme helpers, editor wrapping, the resource picker, and footer APIs against the feature tests.

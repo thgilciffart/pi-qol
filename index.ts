@@ -9,6 +9,7 @@ import continueTurn from './src/continue.ts';
 import thinking from './src/thinking.ts';
 import askQuestions from './src/ask-questions/index.ts';
 import statusLine from './src/status-line/index.ts';
+import plugins from './src/plugins/index.ts';
 
 export default function qol(pi: ExtensionAPI): void {
   ephemeral(pi);
@@ -21,4 +22,5 @@ export default function qol(pi: ExtensionAPI): void {
   thinking(pi);
   askQuestions(pi);
   statusLine(pi);
+  plugins(pi);
 }

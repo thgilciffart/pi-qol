@@ -47,6 +47,17 @@ describe('status line editor', () => {
     expect(h.text()).toContain('Preview (sample)');
   });
 
+  test('the header shows saved state on the right and updates after an edit', () => {
+    const h = mount();
+    const header = (width = 100) => h.editor.render(width).map(strip).slice(1, 3);
+    expect(header()[0]).toMatch(/^ Status line +Saved$/);
+    expect(visibleWidth(h.editor.render(100)[1])).toBeLessThanOrEqual(100);
+    h.press(' ');
+    expect(header()[0]).toMatch(/^ Status line +Unsaved changes$/);
+    expect(header(20)).toEqual([' Status line', '    Unsaved changes']);
+    for (const width of [1, 5, 20, 30]) for (const line of h.editor.render(width)) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+  });
+
   test('falls back to sample data when live data is unavailable', () => {
     const h = mount(defaultConfig(), new Map(), false);
     expect(h.text()).toContain('sample, live data unavailable');
@@ -190,9 +201,9 @@ describe('status line editor', () => {
     expect(h.text()).toContain('(not set now)');
     h.press('t'); // gray -> original
     expect(h.text()).toContain('colour: original');
-    expect(h.text()).not.toContain('unsaved changes');
+    expect(h.text()).not.toContain('Unsaved changes');
     for (let i = 0; i < Object.keys(EXTERNAL_COLORS).length + 1; i++) h.press('t');
-    expect(h.text()).not.toContain('unsaved changes');
+    expect(h.text()).not.toContain('Unsaved changes');
     h.press('\x1b[116u', ESC, ESC); // Kitty t, discard
     expect(h.result()).toBeUndefined();
     expect(config.items.at(-1)).not.toHaveProperty('color');
@@ -210,7 +221,7 @@ describe('status line editor', () => {
     statuses.set('a-plugin', 'lint');
     expect(h.text()).toContain('extension: a-plugin');
     expect(h.text()).toMatch(/❯ \[x\] extension: z-plugin/);
-    expect(h.text()).not.toContain('unsaved changes');
+    expect(h.text()).not.toContain('Unsaved changes');
     h.press(' ', ENTER);
     const saved = h.result() as StatusLineConfig;
     expect(saved.items.find(item => item.id === 'extension:z-plugin')?.enabled).toBe(false);

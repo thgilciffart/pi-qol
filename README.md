@@ -13,7 +13,8 @@ Quality of life tools for [Pi](https://pi.dev), bundled in one extension.
 - [Continue interrupted work](#continue-interrupted-work) with `/continue` or Ctrl+Alt+C.
 - Cycle supported thinking levels with `Alt+,` and `Alt+.`.
 - [Start ephemeral chats](#start-an-ephemeral-chat) that keep session history in memory.
-- [Delete threads](#delete-threads) individually or through a searchable picker with date and project groups.
+- [Open a saved thread](#open-a-thread) from a searchable picker with date and project groups, as an alternative to `/resume`.
+- [Delete threads](#delete-threads) individually or through the same picker.
 - [Export chats as HTML](#export-a-chat) with offline LaTeX, printing, and a redaction preview for sharing.
 
 ## Install
@@ -129,6 +130,14 @@ Pi reserves Alt+P for previous-model cycling. To free the shortcut, add this ent
 
 Use `/ephemeral explain this repository` to include an initial prompt. Ephemeral mode controls session history. Exports and files created by tools still write to disk.
 
+## Open a thread
+
+Run `/open` to pick a saved thread and switch to it. Add search text to filter the list as it opens, for example `/open login bug`. Pi's `/resume` still works and is unchanged.
+
+The picker has the same search, scopes, grouping, sort order, and Ctrl+T transcript viewer as `/delete-threads`. Press Enter to open the highlighted thread, or Escape to cancel. Open mode has no selection or deletion keys, so Space goes to the search box.
+
+The list excludes the current thread. If Pi or another extension cancels the switch, or the file has gone since the picker opened, pi-qol reports it and you stay in the current thread.
+
 ## Delete threads
 
 Deletion permanently removes session files. There is no undo. Close a thread in other Pi processes before deleting it.
@@ -139,6 +148,8 @@ Run `/delete` to delete the current thread after confirmation. To delete several
 2. Press Space or Enter to select threads.
 3. Press Ctrl+D to review the selection.
 4. Press Enter to confirm, or N to return to the list.
+
+The top-right of the picker header shows the current scope, grouping, sort order, and number of selected threads. On narrow terminals this state moves to the line below the title.
 
 Tab switches between the current project and all projects. Both tabs start grouped. Ctrl+G changes grouping, and Shift+Up or Shift+Down sets ascending or descending order. Ctrl+T opens the highlighted thread in a read-only transcript viewer that draws messages the way Pi does. In Pi fullscreen mode, the viewer fills the screen. Escape returns to the picker. Ctrl+A selects all matching threads. Escape in the picker exits without deleting unconfirmed selections.
 

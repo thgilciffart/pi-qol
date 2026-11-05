@@ -1,28 +1,38 @@
 import type { SessionInfo, Theme } from '@earendil-works/pi-coding-agent';
 import { Input, matchesKey, truncateToWidth, visibleWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
+import { keyHints, pickerHeader, scopeState, stateField } from './picker-header.ts';
 import { errorMessage } from './shared.ts';
 import { sessionSearchText } from './threads/search.ts';
 
 type Grouping = 'none' | 'date' | 'project';
 type ListRow = { kind: 'heading'; label: string } | { kind: 'thread'; session: SessionInfo; index: number };
 
-export interface ThreadPickerOptions {
+interface SharedPickerOptions {
   project: SessionInfo[];
   loadAll: () => Promise<SessionInfo[]>;
   theme: Theme;
   requestRender: () => void;
   done: () => void;
-  deleteThreads: (sessions: SessionInfo[]) => Promise<string[]>;
   viewTranscript?: (session: SessionInfo) => Promise<void>;
   query?: string;
   rows?: () => number;
 }
 
+/**
+ * Delete mode selects threads and confirms their deletion. Open mode has no selection or
+ * deletion controls: Enter passes the highlighted thread to `openThread` once.
+ */
+export type ThreadPickerMode =
+  | { deleteThreads: (sessions: SessionInfo[]) => Promise<string[]>; openThread?: never }
+  | { openThread: (session: SessionInfo) => void; deleteThreads?: never };
+
+export type ThreadPickerOptions = SharedPickerOptions & ThreadPickerMode;
+
 function clean(value: string): string {
   return value.replace(/[\x00-\x1f\x7f-\x9f]/g, ' ');
 }
 
-/** A searchable thread list with selection and an inline deletion confirmation. */
+/** A searchable thread list. Delete mode adds selection and an inline deletion confirmation. */
 export class ThreadPicker implements Component, Focusable {
   private input = new Input();
   private dateFormatter = new Intl.DateTimeFormat();
@@ -40,12 +50,16 @@ export class ThreadPicker implements Component, Focusable {
   private loading = false;
   private deleting = false;
   private disposed = false;
+  private opened = false;
   private message = '';
+  private headerExtra = 0;
 
   constructor(private options: ThreadPickerOptions) {
     this.project = options.project;
     this.input.setValue(options.query ?? '');
   }
+
+  private get opening(): boolean { return !!this.options.openThread; }
 
   get focused(): boolean { return this.input.focused; }
   set focused(value: boolean) { this.input.focused = value; }
@@ -138,11 +152,12 @@ export class ThreadPicker implements Component, Focusable {
 
   private async deleteConfirmed(): Promise<void> {
     const targets = this.confirmation;
-    if (!targets) return;
+    const deleteThreads = this.options.deleteThreads;
+    if (!targets || !deleteThreads) return;
     this.confirmation = undefined;
     this.deleting = true;
     try {
-      const deleted = new Set(await this.options.deleteThreads(targets));
+      const deleted = new Set(await deleteThreads(targets));
       this.project = this.project.filter(session => !deleted.has(session.path));
       this.all = this.all?.filter(session => !deleted.has(session.path));
       for (const path of deleted) {
@@ -160,7 +175,7 @@ export class ThreadPicker implements Component, Focusable {
   }
 
   handleInput(data: string): void {
-    if (this.disposed) return;
+    if (this.disposed || this.opened) return;
     if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) {
       this.options.done();
       return;
@@ -193,6 +208,17 @@ export class ThreadPicker implements Component, Focusable {
           this.message = `Could not open transcript: ${errorMessage(error)}`;
           if (!this.disposed) this.options.requestRender();
         });
+      } else if (this.opening && matchesKey(data, 'enter')) {
+        const session = sessions[this.index];
+        if (session) {
+          // Accept one choice. The command closes the picker before it switches sessions.
+          this.opened = true;
+          this.options.openThread?.(session);
+          return;
+        }
+      } else if (this.opening) {
+        // Open mode has no selection or deletion keys. Space and Ctrl keys go to the search box.
+        this.navigate(data, sessions);
       } else if (matchesKey(data, 'ctrl+d')) {
         const targets = this.selected.size ? [...this.selected.values()] : sessions[this.index] ? [sessions[this.index]] : [];
         if (targets.length) this.confirmation = targets;
@@ -205,40 +231,69 @@ export class ThreadPicker implements Component, Focusable {
           else this.selected.set(session.path, session);
           this.index = Math.min(this.index + 1, sessions.length - 1);
         }
-      } else if (matchesKey(data, 'up')) this.index = Math.max(0, this.index - 1);
-      else if (matchesKey(data, 'down')) this.index = Math.min(Math.max(0, sessions.length - 1), this.index + 1);
-      else if (matchesKey(data, 'pageUp')) this.index = Math.max(0, this.index - this.pageSize());
-      else if (matchesKey(data, 'pageDown')) this.index = Math.min(Math.max(0, sessions.length - 1), this.index + this.pageSize());
-      else if (matchesKey(data, 'home')) this.index = 0;
-      else if (matchesKey(data, 'end')) this.index = Math.max(0, sessions.length - 1);
-      else {
-        const previous = this.input.getValue();
-        this.input.handleInput(data);
-        if (previous !== this.input.getValue()) this.index = 0;
-      }
+      } else this.navigate(data, sessions);
     }
     this.options.requestRender();
   }
 
+  /** Move the highlight, or pass the key to the search box. */
+  private navigate(data: string, sessions: SessionInfo[]): void {
+    const last = Math.max(0, sessions.length - 1);
+    if (matchesKey(data, 'up')) this.index = Math.max(0, this.index - 1);
+    else if (matchesKey(data, 'down')) this.index = Math.min(last, this.index + 1);
+    else if (matchesKey(data, 'pageUp')) this.index = Math.max(0, this.index - this.pageSize());
+    else if (matchesKey(data, 'pageDown')) this.index = Math.min(last, this.index + this.pageSize());
+    else if (matchesKey(data, 'home')) this.index = 0;
+    else if (matchesKey(data, 'end')) this.index = last;
+    else {
+      const previous = this.input.getValue();
+      this.input.handleInput(data);
+      if (previous !== this.input.getValue()) this.index = 0;
+    }
+  }
+
   private pageSize(): number {
-    return Math.max(1, Math.min(12, (this.options.rows?.() ?? 24) - 10));
+    return Math.max(1, Math.min(12, (this.options.rows?.() ?? 24) - 10 - this.headerExtra));
+  }
+
+  /** Title on the left, with scope, grouping, sort, and selection state on the right. */
+  private header(width: number): string[] {
+    const { theme } = this.options;
+    const action = this.opening ? 'Open thread' : 'Delete threads';
+    const title = theme.bold(`${action} (${this.scope === 'project' ? 'Current project' : 'All projects'})`);
+    const scope = this.scope === 'all' && this.loading
+      ? theme.fg('muted', '○ Current project | ') + theme.fg('accent', 'Loading…')
+      : scopeState(theme, ['Current project', 'All'], this.scope === 'project' ? 0 : 1);
+    const grouping = { none: 'None', date: 'Date', project: 'Project' }[this.grouping];
+    const selected = this.opening ? '' : theme.fg(this.selected.size ? 'accent' : 'muted', `${this.selected.size} selected`);
+    return pickerHeader(title, [scope, stateField(theme, 'Group', grouping),
+      stateField(theme, 'Sort', this.ascending ? 'Ascending' : 'Descending'), selected], width);
   }
 
   render(width: number): string[] {
     if (width < 1) return [];
     const { theme } = this.options;
     const rule = theme.fg('accent', '─'.repeat(width));
-    const lines = [rule, '', theme.bold(`Delete threads (${this.scope === 'project' ? 'Current project' : 'All projects'})`)];
+    const header = this.header(width);
+    // A narrow header wraps its state onto a second line. Take that line from the list.
+    this.headerExtra = header.length - 1;
+    const lines = [rule, '', ...header];
     if (this.confirmation) {
       lines.push(theme.fg('warning', `Permanently delete ${this.confirmation.length} thread${this.confirmation.length === 1 ? '' : 's'}? This cannot be undone.`));
-      lines.push(theme.fg('dim', 'enter confirm · n back · esc exit'), '');
+      lines.push(keyHints(theme, [['enter', 'confirm'], ['n', 'back'], ['esc', 'exit']], width), '');
       for (const session of this.confirmation.slice(0, this.pageSize())) {
         lines.push(`  ${this.threadTitle(session)}`);
       }
       if (this.confirmation.length > this.pageSize()) lines.push(`  … ${this.confirmation.length - this.pageSize()} more selected`);
     } else {
-      lines.push(theme.fg('dim', 'tab project/all · ↑↓ navigate · space/enter select · ctrl+a select all · ctrl+t transcript'));
-      lines.push(theme.fg('dim', `ctrl+d delete · ctrl+g group (${this.grouping}) · shift+↑↓ sort (${this.ascending ? 'ascending' : 'descending'}) · esc exit · ${this.selected.size} selected`), '');
+      if (this.opening) {
+        lines.push(keyHints(theme, [['tab', 'scope'], ['↑↓', 'navigate'], ['enter', 'open'], ['ctrl+t', 'transcript']], width));
+        lines.push(keyHints(theme, [['ctrl+g', 'group'], ['shift+↑↓', 'sort'], ['esc', 'cancel']], width), '');
+      } else {
+        lines.push(keyHints(theme, [['tab', 'scope'], ['↑↓', 'navigate'], ['space/enter', 'select'], ['ctrl+a', 'select all'],
+          ['ctrl+t', 'transcript']], width));
+        lines.push(keyHints(theme, [['ctrl+d', 'delete'], ['ctrl+g', 'group'], ['shift+↑↓', 'sort'], ['esc', 'exit']], width), '');
+      }
       lines.push(...this.input.render(width), '');
       const sessions = this.sessions();
       const rows = this.listRows(sessions);
@@ -251,7 +306,8 @@ export class ThreadPicker implements Component, Focusable {
           continue;
         }
         const { session, index } = row;
-        const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} `, width, index === this.index);
+        const checkbox = this.opening ? '' : this.selected.has(session.path) ? '[x] ' : '[ ] ';
+        const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${checkbox}`, width, index === this.index);
         lines.push(index === this.index ? theme.bg('selectedBg', text) : text);
       }
       if (rows.length > this.pageSize()) lines.push(theme.fg('dim', `${this.index + 1}/${sessions.length} threads`));

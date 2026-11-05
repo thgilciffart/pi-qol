@@ -1,6 +1,6 @@
 import { test, expect, setSystemTime } from 'bun:test';
 import type { SessionInfo } from '@earendil-works/pi-coding-agent';
-import { visibleWidth } from '@earendil-works/pi-tui';
+import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui';
 import { ThreadPicker } from '../src/thread-picker.ts';
 
 const SHIFT_UP = '\x1b[1;2A', SHIFT_DOWN = '\x1b[1;2B', CTRL_G = '\x07', TAB = '\t', DOWN = '\x1b[B';
@@ -159,10 +159,10 @@ test('defaults group the current project by date and all projects by project', a
   const project = mixed();
   const h = fixture(project, async () => project);
   let text = h.text();
-  expect(text).toContain('ctrl+g group (date)'); expect(text).toContain('sort (descending)');
+  expect(text).toContain('Group: Date'); expect(text).toContain('Sort: Descending');
   expect(headings(text)).toEqual(['2025-01-02', '2025-01-01']);
   h.picker.handleInput(TAB); await tick(); text = h.text();
-  expect(text).toContain('ctrl+g group (project)');
+  expect(text).toContain('Group: Project');
   expect(headings(text)).toEqual(['/zeta', '/alpha']);
 });
 
@@ -170,7 +170,7 @@ test('ctrl+g cycles date and none in the current project, and project, none, dat
   const project = mixed();
   const h = fixture(project, async () => project);
   const seen: string[] = [];
-  const grouping = () => h.text().match(/ctrl\+g group \((\w+)\)/)![1];
+  const grouping = () => h.text().match(/Group: (\w+)/)![1].toLowerCase();
   for (let i = 0; i < 3; i++) { seen.push(grouping()); h.picker.handleInput(CTRL_G); }
   expect(seen).toEqual(['date', 'none', 'date']);
   h.picker.handleInput(TAB); await tick(); seen.length = 0;
@@ -181,14 +181,14 @@ test('ctrl+g cycles date and none in the current project, and project, none, dat
 test('each scope remembers its own grouping across tab switches', async () => {
   const project = mixed();
   const h = fixture(project, async () => project);
-  h.picker.handleInput(CTRL_G); expect(h.text()).toContain('group (none)');
+  h.picker.handleInput(CTRL_G); expect(h.text()).toContain('Group: None');
   h.picker.handleInput(TAB); await tick();
-  expect(h.text()).toContain('group (project)');
-  h.picker.handleInput(CTRL_G); h.picker.handleInput(CTRL_G); expect(h.text()).toContain('group (date)');
+  expect(h.text()).toContain('Group: Project');
+  h.picker.handleInput(CTRL_G); h.picker.handleInput(CTRL_G); expect(h.text()).toContain('Group: Date');
   h.picker.handleInput(TAB);
-  expect(h.text()).toContain('group (none)'); expect(headings(h.text())).toEqual([]);
+  expect(h.text()).toContain('Group: None'); expect(headings(h.text())).toEqual([]);
   h.picker.handleInput(TAB);
-  expect(h.text()).toContain('group (date)'); expect(headings(h.text())).toEqual(['2025-01-02', '2025-01-01']);
+  expect(h.text()).toContain('Group: Date'); expect(headings(h.text())).toEqual(['2025-01-02', '2025-01-01']);
 });
 
 test('shift+up sorts ascending and shift+down sorts descending in every grouping', async () => {
@@ -196,7 +196,7 @@ test('shift+up sorts ascending and shift+down sorts descending in every grouping
   const h = fixture(project, async () => project);
   const expectOrder = (direction: 'ascending' | 'descending', groups: string[], threads: string[]) => {
     const text = h.text();
-    expect(text).toContain(`sort (${direction})`);
+    expect(text).toContain(`Sort: ${direction[0].toUpperCase()}${direction.slice(1)}`);
     expect(headings(text)).toEqual(groups); expect(threadOrder(text)).toEqual(threads);
   };
   // All scope starts grouped by project.
@@ -372,4 +372,150 @@ test('ctrl+t previews the focused thread without selecting or deleting it', asyn
   await tick();
   expect(viewed).toEqual(['b']);
   expect(picker.render(120).join('\n')).toContain('0 selected');
+});
+
+test('the header keeps the title left and shows scope, grouping, sort, and selection on the right', async () => {
+  let finishLoad!: (sessions: SessionInfo[]) => void;
+  const h = fixture(defaultProject(), () => new Promise(resolve => { finishLoad = resolve; }));
+  const header = () => h.picker.render(140)[2];
+  expect(header().startsWith('Delete threads (Current project)')).toBe(true);
+  expect(header().endsWith('◉ Current project | ○ All  Group: Date  Sort: Descending  0 selected')).toBe(true);
+  expect(visibleWidth(header())).toBe(140);
+  // Key hints describe actions only. State lives in the header.
+  const hints = h.picker.render(140).slice(3, 5).join('\n');
+  expect(hints).toContain('ctrl+g group'); expect(hints).toContain('shift+↑↓ sort');
+  expect(hints).not.toMatch(/\(date\)|descending|selected$/);
+
+  h.picker.handleInput(' '); h.picker.handleInput(SHIFT_UP); h.picker.handleInput(CTRL_G);
+  expect(header()).toMatch(/Group: None {2}Sort: Ascending {2}1 selected$/);
+  h.picker.handleInput(TAB);
+  expect(header()).toMatch(/^Delete threads \(All projects\).*○ Current project \| Loading… {2}Group: Project/);
+  finishLoad(defaultProject()); await tick();
+  expect(header()).toMatch(/○ Current project \| ◉ All {2}Group: Project {2}Sort: Ascending {2}1 selected$/);
+  h.picker.handleInput('\x04');
+  expect(header()).toContain('Delete threads (All projects)');
+  expect(h.text()).toContain('Permanently delete 1 thread?');
+});
+
+test('narrow headers move state to its own line, drop trailing state, and keep the list within the row budget', () => {
+  const project = Array.from({ length: 20 }, (_, i) => session(String(i).padStart(2, '0'), at(3, 12, i)));
+  const picker = new ThreadPicker({ project, rows: () => 16, loadAll: async () => project,
+    theme, requestRender() {}, done() {}, deleteThreads: async () => [] });
+  const listLength = (width: number) => {
+    const lines = picker.render(width);
+    const start = lines.findIndex(line => line.startsWith('> ')) + 2;
+    return lines.slice(start, lines.findIndex(line => /\d+\/\d+ threads/.test(line))).length;
+  };
+  const wide = picker.render(120);
+  expect(wide[2]).toContain('Delete threads (Current project)'); expect(wide[2]).toContain('0 selected');
+  const mid = picker.render(80);
+  expect(mid[2]).toBe('Delete threads (Current project)');
+  expect(mid[3].endsWith('◉ Current project | ○ All  Group: Date  Sort: Descending  0 selected')).toBe(true);
+  expect(listLength(80)).toBe(listLength(120) - 1);
+  const narrow = picker.render(40);
+  expect(narrow[2]).toBe('Delete threads (Current project)');
+  expect(narrow[3].trim()).toBe('◉ Current project | ○ All  Group: Date');
+  const tiny = picker.render(16);
+  expect(tiny.slice(2, 4).map(stripTerminalSequences)).toEqual(['Delete threads …', '◉ Current proje…']);
+  for (const width of [1, 2, 16, 33, 40, 60, 80, 101, 120]) {
+    for (const line of picker.render(width)) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+  }
+});
+
+// Open mode reuses the picker list, header, search, grouping, and sorting without selection or deletion.
+function openFixture(project = defaultProject(), loadAll?: () => Promise<SessionInfo[]>) {
+  const opened: string[] = [];
+  const viewed: string[] = [];
+  let exited = false;
+  const picker = new ThreadPicker({ project, loadAll: loadAll ?? (async () => [...project, session('other', at(2))]),
+    theme, requestRender() {}, done: () => { exited = true; },
+    openThread: thread => { opened.push(thread.id); }, viewTranscript: async thread => { viewed.push(thread.id); } });
+  picker.focused = true;
+  return { picker, opened, viewed, text: (width = 120) => picker.render(width).join('\n'),
+    row: (title: string, width = 120) => picker.render(width).find(line => line.includes(title)),
+    get exited() { return exited; } };
+}
+
+test('open mode shows an open title, no checkboxes or selection count, and open hints only', () => {
+  const h = openFixture();
+  const lines = h.picker.render(140);
+  expect(lines[2].startsWith('Open thread (Current project)')).toBe(true);
+  expect(lines[2].endsWith('◉ Current project | ○ All  Group: Date  Sort: Descending')).toBe(true);
+  const text = h.text();
+  expect(text).not.toMatch(/\[[ x]\]|selected|delete|select all|space/i);
+  expect(lines.slice(3, 5).join('\n')).toBe(
+    'tab scope · ↑↓ navigate · enter open · ctrl+t transcript\nctrl+g group · shift+↑↓ sort · esc cancel');
+  expect(text).toMatch(/› Thread a/);
+  expect(threadOrder(text)).toEqual(['a', 'b', 'c']);
+});
+
+test('open mode enter opens the highlighted thread once and then ignores input', () => {
+  const h = openFixture();
+  h.picker.handleInput(DOWN); h.picker.handleInput('\r');
+  expect(h.opened).toEqual(['b']);
+  h.picker.handleInput('\r'); h.picker.handleInput(DOWN); h.picker.handleInput('\r'); h.picker.handleInput('\x1b');
+  expect(h.opened).toEqual(['b']); expect(h.exited).toBe(false);
+});
+
+test('open mode escape and ctrl+c cancel without opening, and enter with no match does nothing', () => {
+  for (const key of ['\x1b', '\x03']) {
+    const h = openFixture(); h.picker.handleInput(key);
+    expect(h.exited).toBe(true); expect(h.opened).toEqual([]);
+  }
+  const h = openFixture(); h.picker.handleInput('zzz'); h.picker.handleInput('\r');
+  expect(h.text()).toContain('No matching threads'); expect(h.opened).toEqual([]); expect(h.exited).toBe(false);
+});
+
+test('open mode sends space, ctrl+a, and ctrl+d to the search box instead of selecting or deleting', () => {
+  const h = openFixture([session('a', at(3, 12)), { ...session('b', at(3, 11)), firstMessage: 'Thread b with spaces' }]);
+  const plain = () => stripTerminalSequences(h.text());
+  h.picker.handleInput('b'); h.picker.handleInput(' '); h.picker.handleInput('w');
+  expect(plain()).toContain('> b w'); expect(threadOrder(h.text())).toEqual(['b']);
+  // Ctrl+A moves the search cursor to the start, and Ctrl+D deletes the character after it.
+  h.picker.handleInput('\x01'); h.picker.handleInput('\x04');
+  expect(plain()).not.toMatch(/Permanently delete|selected|\[x\]/);
+  expect(plain()).toContain('>  w');
+  expect(h.opened).toEqual([]);
+});
+
+test('open mode reuses search, scopes, per-scope grouping, and sort direction', async () => {
+  const project = mixed();
+  const h = openFixture(project.slice(1), async () => project);
+  expect(headings(h.text())).toEqual(['2025-01-02', '2025-01-01']);
+  h.picker.handleInput(TAB); await tick();
+  expect(h.text()).toContain('Open thread (All projects)');
+  expect(h.text()).toContain('Group: Project');
+  expect(headings(h.text())).toEqual(['/zeta', '/alpha']); expect(threadOrder(h.text())).toEqual(['d', 'a', 'b', 'c']);
+  h.picker.handleInput(SHIFT_UP);
+  expect(threadOrder(h.text())).toEqual(['c', 'b', 'a', 'd']);
+  h.picker.handleInput(CTRL_G); expect(h.text()).toContain('Group: None');
+  h.picker.handleInput(TAB); expect(h.text()).toContain('Group: Date');
+  h.picker.handleInput(TAB); h.picker.handleInput('zeta');
+  expect(threadOrder(h.text())).toEqual(['a', 'd']);
+  h.picker.handleInput(DOWN); h.picker.handleInput('\r');
+  expect(h.opened).toEqual(['d']);
+});
+
+test('open mode rows keep the title then age on the left and the date or project at the far right', async () => {
+  const thread = session('dated', at(3), '/project');
+  const h = openFixture([thread], async () => [thread]);
+  await withNow(at(10), () => {
+    const row = h.row('Thread dated')!;
+    expect(row.startsWith('› Thread dated  7d ago  ')).toBe(true);
+    expect(row.endsWith('  /project')).toBe(true);
+    expect(visibleWidth(row)).toBe(120);
+    h.picker.handleInput(CTRL_G);
+    expect(h.row('Thread dated')!.endsWith(`  ${formatDate(thread.modified)}`)).toBe(true);
+    for (const width of [1, 8, 40]) for (const line of h.picker.render(width)) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+  });
+});
+
+test('open mode ctrl+t previews the highlighted thread without opening it, and preview errors stay visible', async () => {
+  const h = openFixture();
+  h.picker.handleInput(DOWN); h.picker.handleInput('\x14'); await tick();
+  expect(h.viewed).toEqual(['b']); expect(h.opened).toEqual([]);
+  const failing = new ThreadPicker({ project: [session('a')], loadAll: async () => [], theme, requestRender() {}, done() {},
+    openThread() {}, viewTranscript: async () => { throw new Error('unreadable'); } });
+  failing.handleInput('\x14'); await tick();
+  expect(failing.render(120).join('\n')).toContain('Could not open transcript: unreadable');
 });

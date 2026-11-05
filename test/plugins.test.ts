@@ -301,9 +301,12 @@ describe('/plugins', () => {
     const h = await fixture();
     const before = await h.global();
     await h.run('', async component => {
-      expect(text(component)).toContain('Ctrl+S save');
+      expect(text(component)).toContain('ctrl+s save');
+      const header = () => text(component).split('\n')[0];
+      expect(header()).toMatch(/^Global plugins +◉ Global \| ○ Project$/);
       toggle(component, 'auto.ts');
-      expect(text(component)).toContain('Unsaved changes');
+      expect(header()).toMatch(/^Global plugins +◉ Global \| ○ Project {2}Unsaved changes$/);
+      expect(text(component, 40).split('\n').slice(0, 2)).toEqual(['Global plugins', '   ◉ Global | ○ Project  Unsaved changes']);
       expect(await h.global()).toEqual(before);
       expect(h.reloads()).toBe(0);
       await writeFile(join(h.agentDir, 'settings.json'), JSON.stringify({ ...before, defaultProvider: 'edited-elsewhere' }));
@@ -333,7 +336,7 @@ describe('/plugins', () => {
           component.handleInput('\t');
         } else {
           toggle(component, 'project.ts');
-          expect(text(component)).toContain('Unsaved changes');
+          expect(text(component).split('\n')[0]).toMatch(/^Project plugins +○ Global \| ◉ Project {2}Unsaved changes$/);
           expect(await h.global()).toEqual(global);
           expect(await h.project()).toEqual(project);
         }

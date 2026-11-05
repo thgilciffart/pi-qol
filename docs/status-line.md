@@ -21,7 +21,7 @@ The `color` and `colour` forms require a mode. Other actions, such as `on` and `
 
 ## Editor keys
 
-The editor has a live preview and a sample preview. Long previews show a window of lines that follows the selected row so the controls remain visible. Changes remain in the draft until saved. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.
+The editor has a live preview and a sample preview. Long previews show a window of lines that follows the selected row so the controls remain visible. Changes remain in the draft until saved. The right side of the header shows `Saved` or `Unsaved changes`. The first three settings control the custom footer, colour mode, and visibility of newly discovered plugin statuses.
 
 If saved settings change while the editor is open, the save reports a conflict and leaves the file unchanged. Reopening the editor loads the latest settings.
 

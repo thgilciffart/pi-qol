@@ -4,6 +4,7 @@ import {
   BUILTIN_LABELS, COLOR_MODES, EXTERNAL_COLORS, MAX_ITEMS, cloneConfig, defaultConfig, extensionKey, isSeparator, resolveItems,
   type BuiltinModuleId, type ExternalColor, type Side, type StatusLineConfig, type StatusLineItem,
 } from './config.ts';
+import { pickerHeader } from '../picker-header.ts';
 import { renderStatusLine, sampleSnapshot, sanitizeInline, type StatusSnapshot } from './render.ts';
 
 export interface StatusLineEditorOptions {
@@ -262,7 +263,8 @@ export class StatusLineEditor implements Component {
     const rule = t.fg('borderMuted', '─'.repeat(Math.max(0, width)));
 
     lines.push(rule);
-    add(t.bold(t.fg('accent', 'Status line')) + t.fg('muted', `  ${this.dirty ? '• unsaved changes' : 'saved'}`));
+    const state = this.dirty ? t.fg('warning', 'Unsaved changes') : t.fg('muted', 'Saved');
+    for (const line of pickerHeader(t.bold(t.fg('accent', 'Status line')), [state], inner)) add(line);
     const { data, label } = this.previewData();
     add(t.fg('muted', `Preview (${label}) · p toggles live/sample`));
     if (this.draft.enabled) {

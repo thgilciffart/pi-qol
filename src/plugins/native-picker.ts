@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getPackageDir, type ExtensionCommandContext, type ResolvedPaths, type SettingsManager } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
+import { keyHints, pickerHeader, scopeState } from '../picker-header.ts';
 import { compactResourceList, type NativeResourceList } from './compact-list.ts';
 
 export type PluginScope = 'global' | 'project';
@@ -45,11 +46,16 @@ export async function pickPlugins(ctx: ExtensionCommandContext, paths: PluginPat
     selector.render = width => {
       const title = scope === 'project' ? 'Project plugins' : 'Global plugins';
       const path = scope === 'project' ? join(ctx.cwd, '.pi/settings.json') : join(agentDir, 'settings.json');
-      const hint = (settings.isProjectTrusted() ? 'Tab scope · ' : '') + 'Space toggle · Ctrl+S save · Esc cancel';
+      const trusted = settings.isProjectTrusted();
+      // Tab only switches scope in trusted projects, so the scope toggle appears only then.
+      const state = [trusted ? scopeState(theme, ['Global', 'Project'], scope === 'global' ? 0 : 1) : '',
+        changed() ? theme.fg('warning', 'Unsaved changes') : ''];
+      const hints: [string, string][] = [['space', 'toggle'], ['ctrl+s', 'save'], ['esc', 'cancel']];
+      if (trusted) hints.unshift(['tab', 'scope']);
       return [
-        truncateToWidth(theme.bold(title) + (changed() ? theme.fg('warning', ' · Unsaved changes') : ''), width, '…'),
+        ...pickerHeader(theme.bold(title), state, width),
         truncateToWidth(theme.fg('muted', path), width, '…'),
-        truncateToWidth(theme.fg('muted', hint), width, '…'),
+        keyHints(theme, hints, width),
         '', ...selector.getResourceList().render(width),
       ];
     };

@@ -46,7 +46,7 @@ The picker uses Pi's resource override rules. Package toggles update the package
 
 ## Applying changes
 
-Toggles change an in-memory draft. The header shows `Unsaved changes` while the draft differs from saved settings. Switching scopes retains the draft and previews project inheritance using the draft's global choices.
+Toggles change an in-memory draft. The right side of the header shows the active scope, and `Unsaved changes` while the draft differs from saved settings. Switching scopes retains the draft and previews project inheritance using the draft's global choices.
 
 Ctrl+S writes the draft to Pi's settings and reloads when settings have changed. Reload applies the choices to extension commands, tools, shortcuts, and event handlers. Saving without changes does not reload. Escape and Ctrl+C discard the draft without writing settings or reloading.
 

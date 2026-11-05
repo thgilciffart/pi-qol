@@ -27,6 +27,7 @@ Statistics rows persist as custom session entries and never enter model context.
 | `/statusline [option]` | Opens the status line editor or changes footer settings. See the [status line reference](status-line.md). |
 | `/goal [objective]` | Shows the current goal, or sets an objective and starts work. See the [goal reference](goals.md) for lifecycle and budget commands. |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
+| `/open [search text]` | Opens the [thread picker](#thread-picker-keys) in open mode. Enter closes the picker, then switches to the highlighted thread with `ctx.switchSession`. Escape cancels. Pi's `/resume` is unchanged. |
 | `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |
 | `/ephemeral [prompt]` | Immediately starts an in-memory chat and sends the optional prompt. With no prompt, an empty, idle ephemeral chat returns to the previous saved chat. Chats that contain messages remain private. |
 | `/better-export [flags] [file.html]` | Saves an HTML export of a file-backed session. |
@@ -37,9 +38,11 @@ Deletion requires an interactive UI and waits for the agent to become idle. The 
 
 Deletion removes only the selected JSONL session files. Forked sessions, exports, and project files remain on disk. The extension cannot detect whether another Pi process has a selected thread open. The All scope includes Pi's default session storage and the active project's session directory. It does not scan other custom session directories.
 
+`/open` has the same UI requirements as `/delete-threads` and the same list, which excludes the current session file. It waits for the agent to become idle before it shows the picker, and again before it switches. If the selected file no longer exists, `/open` reports the path and does not switch. If the switch is cancelled or throws, `/open` reports it and the current thread stays active. Pi handles a saved thread whose working directory is missing the same way it does for `/resume`.
+
 ## Thread picker keys
 
-The list contains thread rows and a search box. The current project starts grouped by date. All projects starts grouped by project. Each tab remembers its grouping choice. Project groups show the last-message date at the far right. Date groups show the project path there. Each row shows elapsed time since the last message immediately after the thread name. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. Selection persists when the search, scope, grouping, or sort order changes. Group headings are not selectable. Changing grouping or sort order keeps the same thread highlighted.
+The list contains thread rows and a search box. The header shows the title on the left. The right side shows the scope, grouping, sort order, and selected count, or `Loading…` while All projects loads. When the terminal is too narrow for both, the state moves to the line below the title and drops trailing items that do not fit. The key hints below the header list actions only. The current project starts grouped by date. All projects starts grouped by project. Each tab remembers its grouping choice. Project groups show the last-message date at the far right. Date groups show the project path there. Each row shows elapsed time since the last message immediately after the thread name. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. Selection persists when the search, scope, grouping, or sort order changes. Group headings are not selectable. Changing grouping or sort order keeps the same thread highlighted.
 
 | Key | Behavior |
 | --- | --- |
@@ -54,6 +57,8 @@ The list contains thread rows and a search box. The current project starts group
 | Ctrl+A | Selects all matching threads in the current scope. |
 | Ctrl+D | Asks to delete the selected threads. With no selection, asks to delete the highlighted thread. |
 | Escape | Exits the picker without deleting unconfirmed selections. |
+
+In open mode, the header title is `Open thread` and the header has no selected count. Rows have no checkboxes. Enter opens the highlighted thread. Space, Ctrl+A, and Ctrl+D edit the search box. Escape and Ctrl+C cancel. All other keys in the table work as listed.
 
 Date groups use the last-modified calendar date in the local timezone, with the newest date first. Project groups use the full working directory path, with Z–A order by default. Within each group, threads appear newest first. Shift+Up sorts dates oldest first and projects A–Z. Shift+Down restores descending order. Group headings repeat when you scroll within a group.
 

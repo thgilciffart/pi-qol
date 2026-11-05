@@ -2,6 +2,7 @@ import { DefaultPackageManager, getAgentDir, SettingsManager,
   type ExtensionAPI, type ResolvedPaths } from '@earendil-works/pi-coding-agent';
 import { completions, errorMessage } from '../shared.ts';
 import { pickPlugins, type PluginScope } from './native-picker.ts';
+import { createPluginDraft } from './draft.ts';
 
 function checkSettings(settings: SettingsManager): void {
   const errors = settings.drainErrors();
@@ -19,25 +20,18 @@ function preserveDiscoveryEntries(current: string[], next: string[], inherited =
   return [...new Set([...plain, ...next])];
 }
 
-export async function discoverPlugins(cwd: string, agentDir: string, projectTrusted: boolean) {
-  const settings = SettingsManager.create(cwd, agentDir, { projectTrusted });
-  const globalSettings = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
+export async function discoverPlugins(cwd: string, agentDir: string, projectTrusted: boolean,
+  settings = SettingsManager.create(cwd, agentDir, { projectTrusted })) {
+  const globalSettings = SettingsManager.fromStorage({
+    withLock(scope, read) { read(scope === 'global' ? JSON.stringify(settings.getGlobalSettings()) : undefined); },
+  }, { projectTrusted: false });
   checkSettings(settings);
   checkSettings(globalSettings);
   const resolve = (manager: SettingsManager) => new DefaultPackageManager({ cwd, agentDir, settingsManager: manager })
     .resolve(async () => 'skip');
   const [global, project] = await Promise.all([resolve(globalSettings), projectTrusted ? resolve(settings) : Promise.resolve(undefined)]);
 
-  const setGlobalPaths = settings.setExtensionPaths.bind(settings);
-  const setProjectPaths = settings.setProjectExtensionPaths.bind(settings);
-  const inherited = new Set(global.extensions.map(item => item.path));
-  settings.setExtensionPaths = paths => setGlobalPaths(preserveDiscoveryEntries(settings.getGlobalSettings().extensions ?? [], paths));
-  settings.setProjectExtensionPaths = paths => setProjectPaths(preserveDiscoveryEntries(settings.getProjectSettings().extensions ?? [], paths, inherited));
   return { settings, paths: { global: extensionsOnly(global), project: extensionsOnly(project ?? global) } };
-}
-
-function snapshot(settings: SettingsManager): string {
-  return JSON.stringify([settings.getGlobalSettings(), settings.getProjectSettings()]);
 }
 
 export default function plugins(pi: ExtensionAPI, options: { agentDir?: string } = {}): void {
@@ -55,22 +49,32 @@ export default function plugins(pi: ExtensionAPI, options: { agentDir?: string }
         }
         if (scope === 'project' && !ctx.isProjectTrusted()) throw new Error('Trust this project in Pi before changing its plugins.');
         const agentDir = options.agentDir ?? getAgentDir();
-        let { settings, paths } = await discoverPlugins(ctx.cwd, agentDir, ctx.isProjectTrusted());
+        const source = SettingsManager.create(ctx.cwd, agentDir, { projectTrusted: ctx.isProjectTrusted() });
+        checkSettings(source);
+        const draft = createPluginDraft(source);
+        const settings = draft.settings;
+        let { paths } = await discoverPlugins(ctx.cwd, agentDir, ctx.isProjectTrusted(), settings);
         if (!paths.global.extensions.length && !paths.project.extensions.length) {
           ctx.ui.notify('No installed Pi extensions found.', 'info');
           return;
         }
-        const before = snapshot(settings);
+        const setGlobalPaths = settings.setExtensionPaths.bind(settings);
+        const setProjectPaths = settings.setProjectExtensionPaths.bind(settings);
+        const inherited = new Set(paths.global.extensions.map(item => item.path));
+        settings.setExtensionPaths = paths => setGlobalPaths(preserveDiscoveryEntries(settings.getGlobalSettings().extensions ?? [], paths));
+        settings.setProjectExtensionPaths = paths => setProjectPaths(preserveDiscoveryEntries(settings.getProjectSettings().extensions ?? [], paths, inherited));
         let writeScope: PluginScope = scope;
         while (true) {
-          const nextScope = await pickPlugins(ctx, paths, settings, agentDir, writeScope);
+          const result = await pickPlugins(ctx, paths, settings, agentDir, writeScope, draft.changed);
           await settings.flush();
           checkSettings(settings);
-          if (!nextScope) break;
-          writeScope = nextScope;
-          ({ settings, paths } = await discoverPlugins(ctx.cwd, agentDir, ctx.isProjectTrusted()));
+          if (result === 'cancel') return;
+          if (result === 'save') break;
+          writeScope = result;
+          ({ paths } = await discoverPlugins(ctx.cwd, agentDir, ctx.isProjectTrusted(), settings));
         }
-        if (snapshot(settings) === before) return;
+        if (!draft.changed()) return;
+        await draft.save(ctx.cwd, agentDir);
         if (!ctx.isIdle() || ctx.hasPendingMessages()) {
           ctx.ui.notify('Plugin settings saved. Run /reload when Pi is idle to apply them.', 'info');
           return;

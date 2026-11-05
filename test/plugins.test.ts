@@ -41,7 +41,8 @@ async function fixture(options: { trusted?: boolean; idle?: boolean; pending?: b
   let reloads = 0;
   let afterSave: any;
   let picker: any;
-  let script = (_component: any) => {};
+  let script: (component: any) => void | Promise<void> = () => {};
+  let exit = '\x13';
   const ctx: any = {
     cwd, mode: options.mode ?? 'tui', hasUI: options.hasUI ?? true,
     isIdle: () => options.idle ?? true, hasPendingMessages: () => options.pending ?? false,
@@ -53,20 +54,21 @@ async function fixture(options: { trusted?: boolean; idle?: boolean; pending?: b
     },
     ui: {
       notify: (message: string, type?: string) => notices.push({ message, type }),
-      custom: (factory: any) => new Promise(resolve => {
+      custom: (factory: any) => new Promise((resolve, reject) => {
         picker = factory({ terminal: { rows: 40 }, requestRender: () => {} },
           { fg: (_color: string, text: string) => text, bold: (text: string) => text },
           { matches: (data: string, action: string) => action === 'tui.input.tab' && data === '\t' }, resolve);
         picker.focused = true;
         frames.push(stripTerminalSequences(picker.render(130).join('\n')));
-        script(picker);
-        picker.handleInput('\x1b');
+        Promise.resolve(script(picker)).then(() => picker.handleInput(exit), reject);
       }),
     },
   };
   plugins({ registerCommand: (_name, value) => { command = value; } } as never, { agentDir });
   return { cwd, agentDir, pkg, ctx, notices, frames,
-    run: (args = '', action = (_component: any) => {}) => { script = action; return command.handler(args, ctx); },
+    run: (args = '', action: (component: any) => void | Promise<void> = () => {}, close = '\x13') => {
+      script = action; exit = close; return command.handler(args, ctx);
+    },
     reloads: () => reloads, afterSave: () => afterSave, picker: () => picker,
     discover: () => discoverPlugins(cwd, agentDir, options.trusted ?? true),
     global: async () => JSON.parse(await readFile(join(agentDir, 'settings.json'), 'utf8')),
@@ -275,7 +277,7 @@ describe('/plugins', () => {
   test('lists only extensions, including disabled package entries, and cancelling leaves settings unchanged', async () => {
     const h = await fixture({ global: { packages: [] } });
     const original = await h.global();
-    await h.run();
+    await h.run('', () => {}, '\x1b');
     expect(h.frames[0]).toContain('auto.ts');
     expect(h.frames[0]).not.toContain('project.ts');
     expect(h.reloads()).toBe(0);
@@ -295,9 +297,17 @@ describe('/plugins', () => {
     expect(other.frames[0]).not.toContain('prompt.md');
   });
 
-  test('disables and re-enables a discovered extension and flushes settings before reload', async () => {
+  test('toggles stay in memory until Ctrl+S saves, preserving unrelated settings before reload', async () => {
     const h = await fixture();
-    await h.run('', component => toggle(component, 'auto.ts'));
+    const before = await h.global();
+    await h.run('', async component => {
+      expect(text(component)).toContain('Ctrl+S save');
+      toggle(component, 'auto.ts');
+      expect(text(component)).toContain('Unsaved changes');
+      expect(await h.global()).toEqual(before);
+      expect(h.reloads()).toBe(0);
+      await writeFile(join(h.agentDir, 'settings.json'), JSON.stringify({ ...before, defaultProvider: 'edited-elsewhere' }));
+    });
     expect(h.notices).toEqual([]);
     expect(h.reloads()).toBe(1);
     expect(h.afterSave().extensions).toContain('-extensions/auto.ts');
@@ -306,8 +316,33 @@ describe('/plugins', () => {
     await h.run('', component => toggle(component, 'auto.ts'));
     state = await h.discover();
     expect(state.paths.global.extensions.find(item => item.path.endsWith('auto.ts'))?.enabled).toBe(true);
-    expect((await h.global()).defaultProvider).toBe('fixture');
+    expect((await h.global()).defaultProvider).toBe('edited-elsewhere');
     expect(h.reloads()).toBe(2);
+  });
+
+  test('Escape and Ctrl+C discard drafts in both scopes, including after switching scope', async () => {
+    for (const close of ['\x1b', '\x03']) {
+      const h = await fixture();
+      const global = await h.global();
+      const project = await h.project();
+      let opens = 0;
+      await h.run('', async component => {
+        if (opens++ === 0) {
+          toggle(component, 'auto.ts');
+          expect(await h.global()).toEqual(global);
+          component.handleInput('\t');
+        } else {
+          toggle(component, 'project.ts');
+          expect(text(component)).toContain('Unsaved changes');
+          expect(await h.global()).toEqual(global);
+          expect(await h.project()).toEqual(project);
+        }
+      }, close);
+      expect(await h.global()).toEqual(global);
+      expect(await h.project()).toEqual(project);
+      expect(h.reloads()).toBe(0);
+      expect(h.notices).toEqual([]);
+    }
   });
 
   test('disabled explicitly configured files remain discoverable across picker openings', async () => {
@@ -377,9 +412,13 @@ describe('/plugins', () => {
 
   test('switching scope refreshes inherited choices after a global toggle', async () => {
     const h = await fixture();
+    const globalBefore = await h.global();
+    const projectBefore = await h.project();
     let opens = 0;
-    await h.run('', component => {
+    await h.run('', async component => {
       toggle(component, 'auto.ts');
+      expect(await h.global()).toEqual(globalBefore);
+      expect(await h.project()).toEqual(projectBefore);
       if (opens++ === 0) component.handleInput('\t');
     });
     const { paths } = await h.discover();

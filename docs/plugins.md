@@ -23,7 +23,8 @@ The command requires Pi's interactive terminal UI. It does not open while Pi is 
 | Page Up/Page Down | Moves through longer lists. |
 | Space or Enter | Toggles the selected extension and selects the next matching extension. In project mode, cycles its override. |
 | Tab | Switches between global and project settings. Available in trusted projects. |
-| Escape or Ctrl+C | Closes the picker and applies saved changes. |
+| Ctrl+S | Saves changes in both scopes, closes the picker, and reloads Pi. |
+| Escape or Ctrl+C | Closes the picker and discards unsaved changes in both scopes. |
 
 Pi's configured keybindings apply to navigation, search, and confirmation.
 
@@ -45,9 +46,11 @@ The picker uses Pi's resource override rules. Package toggles update the package
 
 ## Applying changes
 
-The picker saves each toggle. Closing it flushes settings and reloads Pi when settings have changed. Reload applies the choices to extension commands, tools, shortcuts, and event handlers. Closing without changes does not reload.
+Toggles change an in-memory draft. The header shows `Unsaved changes` while the draft differs from saved settings. Switching scopes retains the draft and previews project inheritance using the draft's global choices.
 
-If work starts while the picker is open, settings remain saved. The command asks you to run `/reload` when Pi is idle. A reload failure also leaves settings saved for a later retry.
+Ctrl+S writes the draft to Pi's settings and reloads when settings have changed. Reload applies the choices to extension commands, tools, shortcuts, and event handlers. Saving without changes does not reload. Escape and Ctrl+C discard the draft without writing settings or reloading.
+
+If work starts while the picker is open, Ctrl+S saves the draft and asks you to run `/reload` when Pi is idle. A reload failure also leaves settings saved for a later retry.
 
 Other open Pi processes use the new settings after their next reload or restart.
 

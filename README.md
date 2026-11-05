@@ -85,7 +85,7 @@ See the [goal reference](docs/goals.md) for commands, budget accounting, and con
 
 Run `/plugins` to enable or disable installed Pi extensions. Packages with one extension use a single row. Packages with several extensions show their files in a folder tree.
 
-Type to search, use Up/Down to select an extension, and press Space to toggle it. Each toggle moves the selection to the next extension. Press Escape to close the picker and reload Pi with your changes.
+Type to search, use Up/Down to select an extension, and press Space to toggle it. Each toggle moves the selection to the next extension. Press Ctrl+S to save your changes and reload Pi. Escape or Ctrl+C discards unsaved changes.
 
 The picker opens global settings. Press Tab to switch to project settings, or run `/plugins project`. Project settings can enable, disable, or inherit a global extension. Pi must trust the project before you can change its settings.
 

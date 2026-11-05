@@ -1,11 +1,12 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getPackageDir, type ExtensionCommandContext, type ResolvedPaths, type SettingsManager } from '@earendil-works/pi-coding-agent';
-import type { Component, Focusable } from '@earendil-works/pi-tui';
+import { matchesKey, truncateToWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
 import { compactResourceList, type NativeResourceList } from './compact-list.ts';
 
 export type PluginScope = 'global' | 'project';
 export type PluginPaths = Record<PluginScope, ResolvedPaths>;
+type PickerResult = PluginScope | 'save' | 'cancel';
 
 interface NativeSelector extends Component, Focusable {
   getResourceList(): NativeResourceList;
@@ -19,7 +20,7 @@ type SelectorConstructor = new (
 ) => NativeSelector;
 
 export async function pickPlugins(ctx: ExtensionCommandContext, paths: PluginPaths, settings: SettingsManager,
-  agentDir: string, scope: PluginScope): Promise<PluginScope | undefined> {
+  agentDir: string, scope: PluginScope, changed = () => false): Promise<PickerResult> {
   const moduleUrl = pathToFileURL(join(getPackageDir(), 'dist/modes/interactive/components/config-selector.js')).href;
   const { ConfigSelectorComponent } = await import(moduleUrl) as { ConfigSelectorComponent: SelectorConstructor };
   // Treat plain project paths as discovery entries, not explicit load overrides.
@@ -34,16 +35,31 @@ export async function pickPlugins(ctx: ExtensionCommandContext, paths: PluginPat
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
-  return ctx.ui.custom<PluginScope | undefined>((tui, theme, keys, done) => {
-    const close = () => done(undefined);
+  return ctx.ui.custom<PickerResult>((tui, theme, keys, done) => {
+    let closed = false;
+    const finish = (result: PickerResult) => { if (!closed) { closed = true; done(result); } };
+    const close = () => finish('cancel');
     const selector = new ConfigSelectorComponent(paths, pickerSettings, ctx.cwd, agentDir, close, close,
       () => tui.requestRender(), tui.terminal.rows, scope, settings.isProjectTrusted());
     compactResourceList(selector.getResourceList(), theme, scope === 'project');
+    selector.render = width => {
+      const title = scope === 'project' ? 'Project plugins' : 'Global plugins';
+      const path = scope === 'project' ? join(ctx.cwd, '.pi/settings.json') : join(agentDir, 'settings.json');
+      const hint = (settings.isProjectTrusted() ? 'Tab scope · ' : '') + 'Space toggle · Ctrl+S save · Esc cancel';
+      return [
+        truncateToWidth(theme.bold(title) + (changed() ? theme.fg('warning', ' · Unsaved changes') : ''), width, '…'),
+        truncateToWidth(theme.fg('muted', path), width, '…'),
+        truncateToWidth(theme.fg('muted', hint), width, '…'),
+        '', ...selector.getResourceList().render(width),
+      ];
+    };
     // The CLI focuses the resource list itself. Custom dialogs focus their root.
     selector.handleInput = data => {
-      if (settings.isProjectTrusted() && keys.matches(data, 'tui.input.tab')) {
-        // Re-resolve after flushing so inherited choices reflect global edits.
-        done(scope === 'global' ? 'project' : 'global');
+      if (closed) return;
+      if (matchesKey(data, 'ctrl+s')) finish('save');
+      else if (settings.isProjectTrusted() && keys.matches(data, 'tui.input.tab')) {
+        // Re-resolve from the draft so inherited choices reflect global edits.
+        finish(scope === 'global' ? 'project' : 'global');
       } else selector.getResourceList().handleInput?.(data);
     };
     return selector;

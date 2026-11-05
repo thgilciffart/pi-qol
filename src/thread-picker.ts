@@ -83,8 +83,9 @@ export class ThreadPicker implements Component, Focusable {
     const leftBudget = Math.max(0, width - visibleWidth(right) - 2);
     const title = truncateToWidth(`${prefix}${clean(session.name || session.firstMessage || session.id)}`,
       Math.max(0, leftBudget - visibleWidth(age) - 2));
-    const left = truncateToWidth(`${title}  ${age}`, leftBudget);
-    return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${right}`;
+    const { theme } = this.options;
+    const left = truncateToWidth(`${theme.fg('text', title)}  ${theme.fg('muted', age)}`, leftBudget);
+    return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${theme.fg('accent', right)}`;
   }
 
   private groupLabel(session: SessionInfo): string {
@@ -247,7 +248,7 @@ export class ThreadPicker implements Component, Focusable {
         }
         const { session, index } = row;
         const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} `, width);
-        lines.push(index === this.index ? theme.bg('selectedBg', theme.fg('accent', text)) : text);
+        lines.push(index === this.index ? theme.bg('selectedBg', text) : text);
       }
       if (rows.length > this.pageSize()) lines.push(theme.fg('dim', `${this.index + 1}/${sessions.length} threads`));
       if (this.message) lines.push(theme.fg('muted', clean(this.message)));

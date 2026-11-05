@@ -69,7 +69,7 @@ export class ThreadPicker implements Component, Focusable {
     return `${date}  ${clean(session.name || session.firstMessage || session.id)}`;
   }
 
-  private threadRow(session: SessionInfo, prefix: string, width: number): string {
+  private threadRow(session: SessionInfo, prefix: string, width: number, focused: boolean): string {
     const timestamp = session.modified.getTime();
     const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
     const age = !Number.isFinite(timestamp) ? 'Unknown age'
@@ -84,8 +84,12 @@ export class ThreadPicker implements Component, Focusable {
     const title = truncateToWidth(`${prefix}${clean(session.name || session.firstMessage || session.id)}`,
       Math.max(0, leftBudget - visibleWidth(age) - 2));
     const { theme } = this.options;
-    const left = truncateToWidth(`${theme.fg('text', title)}  ${theme.fg('muted', age)}`, leftBudget);
-    return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${theme.fg('accent', right)}`;
+    const marker = title.slice(0, prefix.length);
+    const name = title.slice(prefix.length);
+    const styledName = theme.fg(session.name ? 'warning' : 'text', name);
+    const styledTitle = theme.fg(focused ? 'accent' : 'dim', marker) + (focused ? theme.bold(styledName) : styledName);
+    const left = truncateToWidth(`${styledTitle}  ${theme.fg('muted', age)}`, leftBudget);
+    return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${theme.fg('dim', right)}`;
   }
 
   private groupLabel(session: SessionInfo): string {
@@ -223,7 +227,7 @@ export class ThreadPicker implements Component, Focusable {
   render(width: number): string[] {
     if (width < 1) return [];
     const { theme } = this.options;
-    const rule = theme.fg('border', '─'.repeat(width));
+    const rule = theme.fg('accent', '─'.repeat(width));
     const lines = [rule, '', theme.bold(`Delete threads (${this.scope === 'project' ? 'Current project' : 'All projects'})`)];
     if (this.confirmation) {
       lines.push(theme.fg('warning', `Permanently delete ${this.confirmation.length} thread${this.confirmation.length === 1 ? '' : 's'}? This cannot be undone.`));
@@ -247,7 +251,7 @@ export class ThreadPicker implements Component, Focusable {
           continue;
         }
         const { session, index } = row;
-        const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} `, width);
+        const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} `, width, index === this.index);
         lines.push(index === this.index ? theme.bg('selectedBg', text) : text);
       }
       if (rows.length > this.pageSize()) lines.push(theme.fg('dim', `${this.index + 1}/${sessions.length} threads`));

@@ -140,7 +140,7 @@ Run `/delete` to delete the current thread after confirmation. To delete several
 3. Press Ctrl+D to review the selection.
 4. Press Enter to confirm, or N to return to the list.
 
-Tab switches between the current project and all projects. Both tabs start grouped. Ctrl+G changes grouping, and Shift+Up or Shift+Down sets ascending or descending order. Ctrl+T opens the highlighted thread in a full-screen transcript viewer. Escape returns to the picker. Ctrl+A selects all matching threads. Escape in the picker exits without deleting unconfirmed selections.
+Tab switches between the current project and all projects. Both tabs start grouped. Ctrl+G changes grouping, and Shift+Up or Shift+Down sets ascending or descending order. Ctrl+T opens the highlighted thread in a read-only transcript viewer that draws messages the way Pi does. In Pi fullscreen mode, the viewer fills the screen. Escape returns to the picker. Ctrl+A selects all matching threads. Escape in the picker exits without deleting unconfirmed selections.
 
 The picker excludes the current thread and stays open after deletion. See the [thread picker reference](docs/reference.md#thread-picker-keys) for all controls.
 

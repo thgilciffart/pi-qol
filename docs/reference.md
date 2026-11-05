@@ -46,7 +46,7 @@ The list contains thread rows and a search box. The current project starts group
 | Tab | Switches between the current project and all projects. |
 | Ctrl+G | Cycles none and date for the current project, or none, date, and project for all projects. |
 | Shift+Up or Shift+Down | Sets ascending or descending order. |
-| Ctrl+T | Opens the highlighted thread in a full-screen transcript viewer. |
+| Ctrl+T | Opens the highlighted thread in the read-only [transcript viewer](#transcript-viewer). |
 | Up or Down | Moves the highlighted row. |
 | Page Up or Page Down | Moves by one page. |
 | Home or End | Moves to the first or last matching thread. |
@@ -57,9 +57,43 @@ The list contains thread rows and a search box. The current project starts group
 
 Date groups use the last-modified calendar date in the local timezone, with the newest date first. Project groups use the full working directory path, with Z–A order by default. Within each group, threads appear newest first. Shift+Up sorts dates oldest first and projects A–Z. Shift+Down restores descending order. Group headings repeat when you scroll within a group.
 
-The transcript viewer includes all saved messages, thinking, tool calls, and tool results. Images appear as placeholders. Up and Down scroll, Page Up and Page Down move a page, and Home and End jump to the start or end. Escape, Ctrl+T, or Ctrl+C returns to the picker.
-
 In the confirmation view, Enter confirms deletion, N returns to the list, and Escape exits. Confirmation includes selections hidden by the current search or scope. The picker remains open after deletion and retains threads whose files could not be removed.
+
+### Transcript viewer
+
+The transcript viewer is read-only. It shows every message entry in the saved session file, in file order, including messages from abandoned branches. Pi's own message components draw each entry, so user and assistant text renders as Markdown, as it does in the chat.
+
+| Saved entry | Display |
+| --- | --- |
+| User message | User message with Markdown. Attached images appear as `[Image: <type>]`. |
+| Assistant message | Thinking, then text with Markdown. Errors from failed responses appear below. |
+| Tool call | Pi's renderer for built-in tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`, and `powershell`. Other tools use Pi's generic view of name, arguments, and output. |
+| Tool result | Joined to its tool call. A result without a matching call appears on its own. A call without a result from an aborted or failed response shows that error. |
+| Shell command (`!`) | Command, output, and exit status. |
+| Extension message | Pi's default view of the message type, including messages hidden from the chat. Extension renderers are not used. |
+| Compaction or branch summary | The full summary text. |
+| Unknown message role | The role name and the message content as text or JSON. |
+
+The viewer strips terminal escape sequences and control characters from all saved text before display. Image data is dropped when the file is read, so tool results show Pi's image placeholder. Lines that are not valid JSON are skipped, and the viewer reports how many it skipped. If the file cannot be read, the picker shows the error.
+
+| Key | Behavior |
+| --- | --- |
+| Up or Down | Scrolls one row. |
+| Mouse wheel | Scrolls in Pi fullscreen mode. Click and drag still select text. |
+| Page Up or Page Down, Space | Scrolls one page, keeping one row of overlap. |
+| Home or End | Jumps to the start or end. |
+| Ctrl+O | Collapses or expands tool output. Output starts expanded. |
+| Escape, Ctrl+T, Ctrl+C, or Q | Returns to the picker with its search, selection, and highlighted row unchanged. |
+
+Where the viewer appears depends on the renderer:
+
+| Renderer | Viewer placement |
+| --- | --- |
+| Pi fullscreen mode | Replaces the whole screen while the viewer has keyboard focus. If another dialog takes focus, Pi's layout returns until the dialog closes. Closing the viewer restores the layout, the picker, and the editor draft. Pi's mouse mode is not changed. |
+| Regular renderer, terminal without inline images | Full-size overlay above the chat. |
+| Regular renderer, terminal with inline images | Replaces the picker in its slot, 6 rows shorter than the terminal. An overlay would show chat images through the viewer. |
+
+Fullscreen takeover reads a private field of Pi's fullscreen renderer. If that field or `isViewportTUI` is missing, the viewer uses the regular placement rules. If a Pi message component is missing or fails, that entry is drawn as a label with Markdown or plain text.
 
 ## Export flags
 

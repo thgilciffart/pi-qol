@@ -1,8 +1,9 @@
 import { access, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { readTranscript, ThreadTranscript } from './thread-transcript.ts';
+import { canTakeOverScreen, readTranscript, ThreadTranscript, TranscriptHost } from './thread-transcript.ts';
 import { ThreadPicker } from './thread-picker.ts';
-import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type SessionInfo } from '@earendil-works/pi-coding-agent';
+import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type SessionInfo, type Theme } from '@earendil-works/pi-coding-agent';
+import { getCapabilities, type TUI } from '@earendil-works/pi-tui';
 import { errorMessage } from './shared.ts';
 import { sessionSearchText } from './threads/search.ts';
 
@@ -81,32 +82,49 @@ export default function threads(pi: ExtensionAPI): void {
       try {
         const current = ctx.sessionManager.getSessionFile();
         const project = matchingSessions(await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir() || undefined), current, '');
-        await ctx.ui.custom<void>((tui, theme, _keybindings, done) => new ThreadPicker({
-          project,
-          loadAll: async () => {
-            const sessions = await SessionManager.listAll();
-            // Include the active project's custom session directory in the All scope.
-            const combined = new Map([...sessions, ...project].map(session => [resolve(session.path), session]));
-            return matchingSessions([...combined.values()], current, '').sort((a, b) => b.modified.getTime() - a.modified.getTime());
-          },
-          viewTranscript: async (session) => {
-            const text = await readTranscript(session.path);
-            await ctx.ui.custom<void>((viewerTui, _theme, _keys, close) => new ThreadTranscript(
-              session.name || session.firstMessage || session.id, text,
-              () => viewerTui.terminal.rows, () => close(), () => viewerTui.requestRender()),
-            { overlay: true, overlayOptions: { width: '100%', maxHeight: '100%', row: 0, col: 0, margin: 0 } });
-          },
-          query: args.trim(),
-          theme,
-          rows: () => tui.terminal.rows,
-          requestRender: () => tui.requestRender(),
-          done: () => done(),
-          deleteThreads: async (sessions) => {
-            const result = await deleteFiles(sessions.map(session => session.path));
-            report(ctx, result);
-            return result.deletedPaths;
-          },
-        }));
+        await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
+          let host: TranscriptHost | undefined;
+          const picker = new ThreadPicker({
+            project,
+            loadAll: async () => {
+              const sessions = await SessionManager.listAll();
+              // Include the active project's custom session directory in the All scope.
+              const combined = new Map([...sessions, ...project].map(session => [resolve(session.path), session]));
+              return matchingSessions([...combined.values()], current, '').sort((a, b) => b.modified.getTime() - a.modified.getTime());
+            },
+            viewTranscript: async (session) => {
+              const transcript = await readTranscript(session.path);
+              const viewer = (viewerTui: TUI, viewerTheme: Theme, close: () => void, rows: () => number) => {
+                const view = new ThreadTranscript({ title: session.name || session.firstMessage || session.id, transcript,
+                  theme: viewerTheme, tui: viewerTui, cwd: session.cwd || ctx.cwd, done: close, rows });
+                view.takeOverScreen(viewerTui);
+                return view;
+              };
+              // Fullscreen Pi swaps the whole layout for the transcript (ThreadTranscript.takeOverScreen), so an
+              // overlay shows nothing of the parent. The regular renderer keeps image rows of the parent visible
+              // under overlays, so image-capable terminals show the transcript in the picker's slot instead.
+              if (canTakeOverScreen(tui) || !getCapabilities().images) {
+                await ctx.ui.custom<void>((viewerTui, viewerTheme, _keys, close) =>
+                  viewer(viewerTui, viewerTheme, () => close(), () => viewerTui.terminal.rows),
+                { overlay: true, overlayOptions: { width: '100%', maxHeight: '100%', anchor: 'top-left', margin: 0 } });
+              } else {
+                await host?.open(close => viewer(tui, theme, close, () => Math.max(1, tui.terminal.rows - 6)));
+              }
+            },
+            query: args.trim(),
+            theme,
+            rows: () => tui.terminal.rows,
+            requestRender: () => tui.requestRender(),
+            done: () => done(),
+            deleteThreads: async (sessions) => {
+              const result = await deleteFiles(sessions.map(session => session.path));
+              report(ctx, result);
+              return result.deletedPaths;
+            },
+          });
+          host = new TranscriptHost(picker, () => tui.requestRender());
+          return host;
+        });
       } catch (error) {
         ctx.ui.notify(`Thread deletion failed: ${errorMessage(error)}`, 'error');
       }

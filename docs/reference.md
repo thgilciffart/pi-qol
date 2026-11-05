@@ -39,7 +39,7 @@ Deletion removes only the selected JSONL session files. Forked sessions, exports
 
 ## Thread picker keys
 
-The list contains thread rows and a search box. The current project starts grouped by date. All projects starts grouped by project. Each tab remembers its grouping choice. Project groups show the last-message date at the far right. Date groups show the project path there. Both include elapsed time since the last message. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. Selection persists when the search, scope, grouping, or sort order changes. Group headings are not selectable. Changing grouping or sort order keeps the same thread highlighted.
+The list contains thread rows and a search box. The current project starts grouped by date. All projects starts grouped by project. Each tab remembers its grouping choice. Project groups show the last-message date at the far right. Date groups show the project path there. Each row shows elapsed time since the last message immediately after the thread name. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. Selection persists when the search, scope, grouping, or sort order changes. Group headings are not selectable. Changing grouping or sort order keeps the same thread highlighted.
 
 | Key | Behavior |
 | --- | --- |

@@ -219,13 +219,13 @@ test('shift+up sorts ascending and shift+down sorts descending in every grouping
 test('changing sort direction or grouping keeps focus on the same thread', () => {
   const h = fixture(mixed());
   h.picker.handleInput(DOWN);
-  expect(h.text()).toMatch(/› \[ \] Thread b/);
+  expect(h.text()).toMatch(/› \[ \].*Thread b/);
   h.picker.handleInput(SHIFT_UP);
-  expect(threadOrder(h.text())).toEqual(['a', 'c', 'b', 'd']); expect(h.text()).toMatch(/› \[ \] Thread b/);
-  h.picker.handleInput(CTRL_G); expect(h.text()).toMatch(/› \[ \] Thread b/);
+  expect(threadOrder(h.text())).toEqual(['a', 'c', 'b', 'd']); expect(h.text()).toMatch(/› \[ \].*Thread b/);
+  h.picker.handleInput(CTRL_G); expect(h.text()).toMatch(/› \[ \].*Thread b/);
   h.picker.handleInput(SHIFT_DOWN);
-  expect(threadOrder(h.text())).toEqual(['d', 'b', 'c', 'a']); expect(h.text()).toMatch(/› \[ \] Thread b/);
-  h.picker.handleInput(DOWN); expect(h.text()).toMatch(/› \[ \] Thread c/);
+  expect(threadOrder(h.text())).toEqual(['d', 'b', 'c', 'a']); expect(h.text()).toMatch(/› \[ \].*Thread b/);
+  h.picker.handleInput(DOWN); expect(h.text()).toMatch(/› \[ \].*Thread c/);
 });
 
 test('group headings are skipped during selection, and grouping preserves deletion targets', async () => {
@@ -275,22 +275,22 @@ test('grouped scrolling repeats headings, keeps focus visible, and fits the row 
   }
 });
 
-test('rows put the title on the left and right-align date, project, and age by grouping', async () => {
+test('rows put the title on the left and right-align date or project with age after the title', async () => {
   const thread = session('dated', at(3), '/project');
   const h = fixture([thread], async () => [thread]);
   await withNow(at(10), async () => {
     const date = formatDate(thread.modified);
     const expectRow = (right: string) => {
       const row = h.row('Thread dated')!;
-      expect(row.startsWith('› [ ] Thread dated  ')).toBe(true);
+      expect(row.startsWith('› [ ] Thread dated  7d ago  ')).toBe(true);
       expect(row.endsWith(`  ${right}`)).toBe(true);
       expect(visibleWidth(row)).toBe(120);
       expect(row).not.toContain(`${date}  Thread dated`);
     };
-    expectRow('/project · 7d ago');
-    h.picker.handleInput(CTRL_G); expectRow(`${date} · 7d ago`);
-    h.picker.handleInput(TAB); await tick(); expectRow(`${date} · 7d ago`);
-    h.picker.handleInput(CTRL_G); h.picker.handleInput(CTRL_G); expectRow('/project · 7d ago');
+    expectRow('/project');
+    h.picker.handleInput(CTRL_G); expectRow(date);
+    h.picker.handleInput(TAB); await tick(); expectRow(date);
+    h.picker.handleInput(CTRL_G); h.picker.handleInput(CTRL_G); expectRow('/project');
   });
 });
 
@@ -308,7 +308,7 @@ test('narrow widths truncate the title first and keep the right column aligned',
     const row = h.row('Long title', 40)!;
     expect(visibleWidth(row)).toBe(40);
     expect(row.startsWith('› [ ] Long title')).toBe(true);
-    expect(row).toMatch(/ {2}\/project · 7d ago$/);
+    expect(row).toMatch(/ {2}\/project$/);
     expect(row).not.toContain('Long title '.repeat(20).trim());
 
     // An oversized right column is truncated so the selection marker and part of the title stay visible.
@@ -325,7 +325,7 @@ test('narrow widths truncate the title first and keep the right column aligned',
   });
 });
 
-test('elapsed age is shown on the right in minutes, hours, and days', async () => {
+test('elapsed age follows the title in minutes, hours, and days', async () => {
   const now = at(10, 12);
   const ago = (ms: number) => new Date(now.getTime() - ms);
   const cases: [string, Date, string][] = [
@@ -341,7 +341,8 @@ test('elapsed age is shown on the right in minutes, hours, and days', async () =
     h.picker.handleInput(CTRL_G); // none: the right column shows the date.
     for (const [id, modified, age] of cases) {
       const date = Number.isFinite(modified.getTime()) ? formatDate(modified) : 'Unknown date';
-      expect(h.row(`Thread ${id}`)!.endsWith(`  ${date} · ${age}`)).toBe(true);
+      expect(h.row(`Thread ${id}`)!).toContain(`Thread ${id}  ${age}`);
+      expect(h.row(`Thread ${id}`)!.endsWith(`  ${date}`)).toBe(true);
     }
   });
 });
@@ -349,9 +350,9 @@ test('elapsed age is shown on the right in minutes, hours, and days', async () =
 test('threads without a valid modified date remain selectable', () => {
   const h = fixture([{ ...session('unknown'), modified: new Date(NaN) }]);
   expect(headings(h.text())).toEqual(['Unknown date']);
-  expect(h.row('Thread unknown')).toMatch(/\/project · Unknown age$/);
+  expect(h.row('Thread unknown')).toMatch(/Thread unknown  Unknown age.*\/project$/);
   h.picker.handleInput(CTRL_G);
-  expect(h.row('Thread unknown')).toMatch(/Unknown date · Unknown age$/);
+  expect(h.row('Thread unknown')).toMatch(/Thread unknown  Unknown age.*Unknown date$/);
   h.picker.handleInput(' ');
   expect(h.text()).toMatch(/\[x\].*Thread unknown/);
   h.picker.handleInput('\x04');

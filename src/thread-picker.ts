@@ -79,9 +79,11 @@ export class ThreadPicker implements Component, Focusable {
       : `${Math.floor(seconds / 86400)}d ago`;
     const detail = this.grouping === 'date' ? clean(session.cwd || 'Unknown project')
       : Number.isFinite(timestamp) ? this.dateFormatter.format(session.modified) : 'Unknown date';
-    const right = truncateToWidth(`${detail} · ${age}`, Math.max(0, width - 10));
-    const left = truncateToWidth(`${prefix}${clean(session.name || session.firstMessage || session.id)}`,
-      Math.max(0, width - visibleWidth(right) - 2));
+    const right = truncateToWidth(detail, Math.max(0, width - visibleWidth(prefix + age) - 12));
+    const leftBudget = Math.max(0, width - visibleWidth(right) - 2);
+    const title = truncateToWidth(`${prefix}${clean(session.name || session.firstMessage || session.id)}`,
+      Math.max(0, leftBudget - visibleWidth(age) - 2));
+    const left = truncateToWidth(`${title}  ${age}`, leftBudget);
     return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${right}`;
   }
 

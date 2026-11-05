@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | Goals | [`src/goal/index.ts`](../src/goal/index.ts) | `model.ts` defines persisted data and validation. `state.ts` defines transient run state. `commands.ts` parses commands, `prompts.ts` holds agent instructions, `format.ts` formats values, and `ui.ts` wraps the composer. | `/goal`, `create_goal`, `get_goal`, `update_goal` |
 | Automatic names | [`src/auto-name.ts`](../src/auto-name.ts) | [`auto-name-picker.ts`](../src/auto-name-picker.ts) adapts Pi's model selector. | `/auto-name` |
-| Plugins | [`src/plugins/index.ts`](../src/plugins/index.ts) | Discovers installed extensions, preserves configured discovery paths, saves Pi resource settings, and reloads. `native-picker.ts` adapts Pi's resource selector with extension-only lists. | `/plugins` |
+| Plugins | [`src/plugins/index.ts`](../src/plugins/index.ts) | Discovers installed extensions, preserves configured discovery paths, saves Pi resource settings, and reloads. `native-picker.ts` adapts Pi's resource selector. `compact-list.ts` renders single-row packages and folder trees and advances selection after toggles. | `/plugins` |
 | Thread deletion | [`src/threads.ts`](../src/threads.ts) | [`thread-picker.ts`](../src/thread-picker.ts) owns the interactive list. [`threads/search.ts`](../src/threads/search.ts) defines searchable fields. | `/delete`, `/delete-threads` |
 | Ephemeral chats | [`src/ephemeral.ts`](../src/ephemeral.ts) | Contains the isolated adapter for Pi's private session-persistence fields. | `/ephemeral`, Alt+P |
 | Response statistics | [`src/metrics.ts`](../src/metrics.ts) | Computes per-response timing and renders persisted transcript entries. | Final assistant reply statistics |

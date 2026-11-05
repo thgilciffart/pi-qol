@@ -2,12 +2,13 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getPackageDir, type ExtensionCommandContext, type ResolvedPaths, type SettingsManager } from '@earendil-works/pi-coding-agent';
 import type { Component, Focusable } from '@earendil-works/pi-tui';
+import { compactResourceList, type NativeResourceList } from './compact-list.ts';
 
 export type PluginScope = 'global' | 'project';
 export type PluginPaths = Record<PluginScope, ResolvedPaths>;
 
 interface NativeSelector extends Component, Focusable {
-  getResourceList(): Component;
+  getResourceList(): NativeResourceList;
 }
 
 // Pi 1.3 does not publicly export its resource picker. Keep that dependency here.
@@ -33,10 +34,11 @@ export async function pickPlugins(ctx: ExtensionCommandContext, paths: PluginPat
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
-  return ctx.ui.custom<PluginScope | undefined>((tui, _theme, keys, done) => {
+  return ctx.ui.custom<PluginScope | undefined>((tui, theme, keys, done) => {
     const close = () => done(undefined);
     const selector = new ConfigSelectorComponent(paths, pickerSettings, ctx.cwd, agentDir, close, close,
       () => tui.requestRender(), tui.terminal.rows, scope, settings.isProjectTrusted());
+    compactResourceList(selector.getResourceList(), theme, scope === 'project');
     // The CLI focuses the resource list itself. Custom dialogs focus their root.
     selector.handleInput = data => {
       if (settings.isProjectTrusted() && keys.matches(data, 'tui.input.tab')) {

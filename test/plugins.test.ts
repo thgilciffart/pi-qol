@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DefaultResourceLoader, initTheme, SettingsManager } from '@earendil-works/pi-coding-agent';
-import { stripTerminalSequences } from '@earendil-works/pi-tui';
+import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui';
 import plugins, { discoverPlugins } from '../src/plugins/index.ts';
 
 initTheme('dark');
@@ -54,7 +54,8 @@ async function fixture(options: { trusted?: boolean; idle?: boolean; pending?: b
     ui: {
       notify: (message: string, type?: string) => notices.push({ message, type }),
       custom: (factory: any) => new Promise(resolve => {
-        picker = factory({ terminal: { rows: 40 }, requestRender: () => {} }, {},
+        picker = factory({ terminal: { rows: 40 }, requestRender: () => {} },
+          { fg: (_color: string, text: string) => text, bold: (text: string) => text },
           { matches: (data: string, action: string) => action === 'tui.input.tab' && data === '\t' }, resolve);
         picker.focused = true;
         frames.push(stripTerminalSequences(picker.render(130).join('\n')));
@@ -78,7 +79,199 @@ function toggle(component: any, query: string) {
   component.handleInput(' ');
 }
 
+function text(component: any, width = 130): string {
+  return stripTerminalSequences(component.render(width).join('\n'));
+}
+
+function selectedLine(component: any): string | undefined {
+  return text(component).split('\n').find(line => line.startsWith('> ') && /\[[x +\-]?\]/.test(line));
+}
+
 describe('/plugins', () => {
+  test('configured extensions with the same filename retain their folders and independent toggles', async () => {
+    for (const directoryEntry of [true, false]) {
+      const h = await fixture({ global: { packages: [], extensions: directoryEntry
+        ? ['../exts'] : ['../exts/foo/index.ts', '../exts/bar/index.ts'] } });
+      const root = join(dirname(h.agentDir), 'exts');
+      for (const name of ['foo', 'bar']) {
+        await mkdir(join(root, name), { recursive: true });
+        await writeFile(join(root, name, 'index.ts'), 'export default function() {}');
+      }
+      await h.run('', component => {
+        component.handleInput('exts');
+        const frame = text(component);
+        expect(frame).toContain('exts');
+        expect(frame).toContain('├─ bar');
+        expect(frame).toContain('└─ foo');
+        expect(frame.match(/\[x\] index\.ts/g)).toHaveLength(2);
+        component.handleInput(' ');
+        expect(text(component)).toContain('[ ] index.ts');
+        expect(selectedLine(component)).toContain('[x] index.ts');
+        component.handleInput(' ');
+        expect(text(component).match(/\[ \] index\.ts/g)).toHaveLength(2);
+      });
+      const state = await h.discover();
+      const configured = state.paths.global.extensions.filter(item => item.path.startsWith(root));
+      expect(configured).toHaveLength(2);
+      expect(configured.every(item => !item.enabled)).toBe(true);
+      await h.run('', component => {
+        component.handleInput('bar/index.ts');
+        expect(text(component)).toContain('bar');
+        expect(text(component)).not.toContain('foo');
+        component.handleInput(' ');
+      });
+      const enabled = (await h.discover()).paths.global.extensions.filter(item => item.path.startsWith(root) && item.enabled);
+      expect(enabled.map(item => item.path)).toEqual([join(root, 'bar/index.ts')]);
+    }
+  });
+
+  test('a lone auto-discovered directory extension keeps its folder context', async () => {
+    const h = await fixture({ global: { packages: [] } });
+    await rm(join(h.agentDir, 'extensions/auto.ts'));
+    await mkdir(join(h.agentDir, 'extensions/my-ext'), { recursive: true });
+    await writeFile(join(h.agentDir, 'extensions/my-ext/index.ts'), 'export default function() {}');
+    await h.run('', component => {
+      expect(text(component)).toContain('User (');
+      expect(text(component)).toContain('└─ extensions');
+      expect(text(component)).toContain('└─ my-ext');
+      expect(selectedLine(component)).toContain('[x] index.ts');
+      component.handleInput(' ');
+    });
+    expect((await h.discover()).paths.global.extensions.find(item => item.path.endsWith('/my-ext/index.ts'))?.enabled).toBe(false);
+  });
+
+  test('top-level resources are not matched by their internal discovery source names', async () => {
+    const h = await fixture({ global: { packages: [], extensions: ['custom.ts'] } });
+    await rm(join(h.agentDir, 'extensions/auto.ts'));
+    await writeFile(join(h.agentDir, 'extensions/one.ts'), 'export default function() {}');
+    await writeFile(join(h.agentDir, 'extensions/two.ts'), 'export default function() {}');
+    for (const query of ['auto', 'local']) {
+      await h.run('', component => {
+        component.handleInput(query);
+        expect(text(component)).toContain('No extensions found');
+      });
+    }
+  });
+
+  test('single-extension packages use one checkbox row and remain searchable by their hidden filename', async () => {
+    const h = await fixture();
+    await writeFile(join(h.pkg, 'package.json'), JSON.stringify({ pi: { extensions: ['alpha.ts'] } }));
+    await h.run('', component => {
+      const frame = text(component);
+      expect(frame.split('\n').filter(line => line.includes(h.pkg))).toEqual([`> [x] ${h.pkg} (user)`]);
+      expect(frame).not.toContain('alpha.ts');
+      expect(frame).not.toMatch(/^\s+Extensions$/m);
+      component.handleInput('alpha.ts');
+      expect(selectedLine(component)).toContain(h.pkg);
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('[ ]');
+    });
+    expect((await h.global()).packages[0].extensions).toEqual(['-alpha.ts']);
+  });
+
+  test('multi-extension packages show their folder tree and advance through files across packages', async () => {
+    const h = await fixture();
+    const extensions = ['src/zeta.ts', 'src/commands/one.ts', 'src/commands/two.ts', 'root.ts'];
+    for (const path of extensions) {
+      await mkdir(dirname(join(h.pkg, path)), { recursive: true });
+      await writeFile(join(h.pkg, path), 'export default function() {}');
+    }
+    await writeFile(join(h.pkg, 'package.json'), JSON.stringify({ pi: { extensions } }));
+    await h.run('', component => {
+      const frame = text(component);
+      expect(frame).toContain('├─ [x] root.ts');
+      expect(frame).toContain('└─ src');
+      expect(frame).toContain('   ├─ commands');
+      expect(frame).toContain('   │  ├─ [x] one.ts');
+      expect(frame).toContain('   │  └─ [x] two.ts');
+      expect(frame).toContain('   └─ [x] zeta.ts');
+      expect(frame).not.toContain('src/zeta.ts');
+      expect(selectedLine(component)).toContain('root.ts');
+      for (const next of ['one.ts', 'two.ts', 'zeta.ts', 'auto.ts']) {
+        component.handleInput(' ');
+        expect(selectedLine(component)).toContain(next);
+      }
+      // The final toggle stays on the last target rather than wrapping.
+      component.handleInput('\r');
+      expect(selectedLine(component)).toContain('auto.ts');
+      expect(selectedLine(component)).toContain('[ ]');
+    });
+    expect((await h.global()).packages[0].extensions).toEqual(extensions.map(path => `-${path}`).sort());
+  });
+
+  test('filtering a multi-extension package keeps its tree and advances only through matches', async () => {
+    const h = await fixture();
+    await h.run('', component => {
+      component.handleInput(h.pkg);
+      expect(selectedLine(component)).toContain('alpha.ts');
+      expect(text(component)).toContain('├─ [x] alpha.ts');
+      component.handleInput('\r');
+      expect(selectedLine(component)).toContain('beta.ts');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('beta.ts');
+      expect(text(component)).not.toContain('auto.ts');
+    });
+    const alpha = await fixture();
+    await alpha.run('', component => {
+      component.handleInput('alpha.ts');
+      expect(text(component)).toContain(alpha.pkg);
+      expect(text(component)).toContain('└─ [x] alpha.ts');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('alpha.ts');
+      component.handleInput('\x15');
+      component.handleInput('nothing-matches');
+      expect(text(component)).toContain('No extensions found');
+    });
+  });
+
+  test('tree navigation skips directories and keeps selection visible while scrolling', async () => {
+    const h = await fixture();
+    const extensions = Array.from({ length: 45 }, (_, index) => `src/commands/file-${String(index).padStart(2, '0')}.ts`);
+    await mkdir(join(h.pkg, 'src/commands'), { recursive: true });
+    await Promise.all(extensions.map(path => writeFile(join(h.pkg, path), 'export default function() {}')));
+    await writeFile(join(h.pkg, 'package.json'), JSON.stringify({ pi: { extensions } }));
+    await h.run('', component => {
+      for (let index = 0; index < 38; index++) component.handleInput('\x1b[B');
+      expect(selectedLine(component)).toContain('file-38.ts');
+      expect(text(component)).toContain(h.pkg);
+      expect(text(component)).toContain('src');
+      expect(text(component)).toContain('commands');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('file-39.ts');
+      component.handleInput('\x1b[A');
+      expect(selectedLine(component)).toContain('file-38.ts');
+      expect(selectedLine(component)).toContain('[ ]');
+      for (const width of [25, 55, 100]) {
+        expect(component.render(width).every((line: string) => visibleWidth(line) <= width)).toBe(true);
+      }
+    });
+    expect((await h.global()).packages[0].extensions).toEqual(['-src/commands/file-38.ts']);
+  });
+
+  test('project overrides keep their indicators and advance after a toggle', async () => {
+    const h = await fixture();
+    await h.run('project', component => {
+      component.handleInput(h.pkg);
+      expect(text(component)).toContain(`${h.pkg} (user) · inherited global`);
+      expect(selectedLine(component)).toContain('alpha.ts');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('beta.ts');
+      component.handleInput('\x1b[A');
+      expect(selectedLine(component)).toContain('[-]');
+      expect(selectedLine(component)).toContain('project unload');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('beta.ts');
+      component.handleInput('\x1b[A');
+      expect(selectedLine(component)).toContain('[+]');
+      expect(selectedLine(component)).toContain('project load');
+      component.handleInput(' ');
+      expect(selectedLine(component)).toContain('beta.ts');
+      component.handleInput('\x1b[A');
+      expect(selectedLine(component)).toContain('[x]');
+      expect(selectedLine(component)).toContain('inherited global');
+    });
+  });
+
   test('lists only extensions, including disabled package entries, and cancelling leaves settings unchanged', async () => {
     const h = await fixture({ global: { packages: [] } });
     const original = await h.global();

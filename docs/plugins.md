@@ -2,6 +2,8 @@
 
 `/plugins` controls installed Pi extensions through Pi's resource settings. It lists enabled and disabled extension files from installed packages, configured paths, and automatic extension discovery. A package with several extension files has a separate toggle for each file.
 
+Packages with one extension occupy one checkbox row, labelled with the package source. Packages with several extensions show a folder tree beneath the package source. Only extension files have checkboxes. Folder headings have no toggle. Filtering a package to one matching file preserves its tree layout.
+
 ## Commands
 
 | Command | Behavior |
@@ -16,14 +18,18 @@ The command requires Pi's interactive terminal UI. It does not open while Pi is 
 
 | Key | Behavior |
 | --- | --- |
-| Type | Searches extension names and paths. |
+| Type | Searches extension names, paths, and package sources. |
 | Up/Down | Moves between extensions. |
 | Page Up/Page Down | Moves through longer lists. |
-| Space or Enter | Toggles the selected extension. In project mode, cycles its override. |
+| Space or Enter | Toggles the selected extension and selects the next matching extension. In project mode, cycles its override. |
 | Tab | Switches between global and project settings. Available in trusted projects. |
 | Escape or Ctrl+C | Closes the picker and applies saved changes. |
 
 Pi's configured keybindings apply to navigation, search, and confirmation.
+
+Selection skips package and folder headings. Toggling the last matching extension keeps it selected. Single-row packages remain searchable by their extension filename even though the row shows the package source.
+
+Project overrides also advance after each toggle. To cycle the same extension again when another match follows, press Up to return to it.
 
 ## Settings scopes
 

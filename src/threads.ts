@@ -89,7 +89,7 @@ export default function threads(pi: ExtensionAPI): void {
     },
   });
   pi.registerCommand('open', {
-    description: 'Open a saved thread from a grouped, searchable picker',
+    description: 'Resume an existing thread',
     handler: async (args, ctx) => {
       if (!pickerAvailable(ctx, 'Opening a thread requires an interactive UI. Use /resume instead.')) return;
       await ctx.waitForIdle();

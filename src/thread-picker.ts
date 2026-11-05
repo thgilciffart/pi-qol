@@ -1,5 +1,5 @@
 import type { SessionInfo, Theme } from '@earendil-works/pi-coding-agent';
-import { Input, matchesKey, truncateToWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
+import { Input, matchesKey, truncateToWidth, visibleWidth, type Component, type Focusable } from '@earendil-works/pi-tui';
 import { errorMessage } from './shared.ts';
 import { sessionSearchText } from './threads/search.ts';
 
@@ -13,6 +13,7 @@ export interface ThreadPickerOptions {
   requestRender: () => void;
   done: () => void;
   deleteThreads: (sessions: SessionInfo[]) => Promise<string[]>;
+  viewTranscript?: (session: SessionInfo) => Promise<void>;
   query?: string;
   rows?: () => number;
 }
@@ -28,7 +29,10 @@ export class ThreadPicker implements Component, Focusable {
   private project: SessionInfo[];
   private all: SessionInfo[] | undefined;
   private scope: 'project' | 'all' = 'project';
-  private grouping: Grouping = 'none';
+  private groupings: Record<'project' | 'all', Grouping> = { project: 'date', all: 'project' };
+  private ascending = false;
+
+  private get grouping(): Grouping { return this.groupings[this.scope]; }
   private index = 0;
   private selected = new Map<string, SessionInfo>();
   private deletedPaths = new Set<string>();
@@ -50,17 +54,35 @@ export class ThreadPicker implements Component, Focusable {
     const query = this.input.getValue().toLocaleLowerCase();
     const sessions = (this.scope === 'project' ? this.project : this.all ?? []).filter(session =>
       sessionSearchText(session).includes(query));
-    if (this.grouping === 'none') return sessions;
     return sessions.sort((a, b) => {
       const left = this.groupLabel(a), right = this.groupLabel(b);
-      const groupOrder = this.grouping === 'date' ? right.localeCompare(left) : left.localeCompare(right);
-      return groupOrder || b.modified.getTime() - a.modified.getTime() || a.path.localeCompare(b.path);
+      const groupOrder = this.grouping === 'none' ? 0 : left.localeCompare(right);
+      const time = (session: SessionInfo) => Number.isFinite(session.modified.getTime()) ? session.modified.getTime() : 0;
+      const order = groupOrder || time(a) - time(b);
+      if (!order) return a.path.localeCompare(b.path);
+      return this.ascending ? order : -order;
     });
   }
 
   private threadTitle(session: SessionInfo): string {
     const date = Number.isFinite(session.modified.getTime()) ? this.dateFormatter.format(session.modified) : 'Unknown date';
     return `${date}  ${clean(session.name || session.firstMessage || session.id)}`;
+  }
+
+  private threadRow(session: SessionInfo, prefix: string, width: number): string {
+    const timestamp = session.modified.getTime();
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    const age = !Number.isFinite(timestamp) ? 'Unknown age'
+      : seconds < 60 ? 'just now'
+      : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago`
+      : seconds < 86400 ? `${Math.floor(seconds / 3600)}h ago`
+      : `${Math.floor(seconds / 86400)}d ago`;
+    const detail = this.grouping === 'date' ? clean(session.cwd || 'Unknown project')
+      : Number.isFinite(timestamp) ? this.dateFormatter.format(session.modified) : 'Unknown date';
+    const right = truncateToWidth(`${detail} · ${age}`, Math.max(0, width - 10));
+    const left = truncateToWidth(`${prefix}${clean(session.name || session.firstMessage || session.id)}`,
+      Math.max(0, width - visibleWidth(right) - 2));
+    return `${left}${' '.repeat(Math.max(0, width - visibleWidth(left) - visibleWidth(right)))}${right}`;
   }
 
   private groupLabel(session: SessionInfo): string {
@@ -149,12 +171,22 @@ export class ThreadPicker implements Component, Focusable {
       if (this.scope === 'all' && !this.all && !this.loading) void this.loadAll();
     } else if (matchesKey(data, 'ctrl+g')) {
       const focused = this.sessions()[this.index]?.path;
-      const modes: Grouping[] = ['none', 'date', 'project'];
-      this.grouping = modes[(modes.indexOf(this.grouping) + 1) % modes.length];
+      const modes: Grouping[] = this.scope === 'project' ? ['none', 'date'] : ['none', 'date', 'project'];
+      this.groupings[this.scope] = modes[(modes.indexOf(this.grouping) + 1) % modes.length];
+      this.index = Math.max(0, this.sessions().findIndex(session => session.path === focused));
+    } else if (matchesKey(data, 'shift+up') || matchesKey(data, 'shift+down')) {
+      const focused = this.sessions()[this.index]?.path;
+      this.ascending = matchesKey(data, 'shift+up');
       this.index = Math.max(0, this.sessions().findIndex(session => session.path === focused));
     } else {
       const sessions = this.sessions();
-      if (matchesKey(data, 'ctrl+d')) {
+      if (matchesKey(data, 'ctrl+t')) {
+        const session = sessions[this.index];
+        if (session && this.options.viewTranscript) void this.options.viewTranscript(session).catch(error => {
+          this.message = `Could not open transcript: ${errorMessage(error)}`;
+          if (!this.disposed) this.options.requestRender();
+        });
+      } else if (matchesKey(data, 'ctrl+d')) {
         const targets = this.selected.size ? [...this.selected.values()] : sessions[this.index] ? [sessions[this.index]] : [];
         if (targets.length) this.confirmation = targets;
       } else if (matchesKey(data, 'ctrl+a')) {
@@ -198,8 +230,8 @@ export class ThreadPicker implements Component, Focusable {
       }
       if (this.confirmation.length > this.pageSize()) lines.push(`  … ${this.confirmation.length - this.pageSize()} more selected`);
     } else {
-      lines.push(theme.fg('dim', 'tab project/all · ↑↓ navigate · space/enter select · ctrl+a select all'));
-      lines.push(theme.fg('dim', `ctrl+d delete · ctrl+g group (${this.grouping}) · esc exit · ${this.selected.size} selected`), '');
+      lines.push(theme.fg('dim', 'tab project/all · ↑↓ navigate · space/enter select · ctrl+a select all · ctrl+t transcript'));
+      lines.push(theme.fg('dim', `ctrl+d delete · ctrl+g group (${this.grouping}) · shift+↑↓ sort (${this.ascending ? 'ascending' : 'descending'}) · esc exit · ${this.selected.size} selected`), '');
       lines.push(...this.input.render(width), '');
       const sessions = this.sessions();
       const rows = this.listRows(sessions);
@@ -212,7 +244,7 @@ export class ThreadPicker implements Component, Focusable {
           continue;
         }
         const { session, index } = row;
-        const text = truncateToWidth(`${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} ${this.threadTitle(session)}`, width);
+        const text = this.threadRow(session, `${index === this.index ? '›' : ' '} ${this.selected.has(session.path) ? '[x]' : '[ ]'} `, width);
         lines.push(index === this.index ? theme.bg('selectedBg', theme.fg('accent', text)) : text);
       }
       if (rows.length > this.pageSize()) lines.push(theme.fg('dim', `${this.index + 1}/${sessions.length} threads`));

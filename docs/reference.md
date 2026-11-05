@@ -39,12 +39,14 @@ Deletion removes only the selected JSONL session files. Forked sessions, exports
 
 ## Thread picker keys
 
-The list contains thread rows and a search box. Each thread row starts with its last-modified date before the title. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. It has no action rows. Selection persists when the search, scope, or grouping changes. Ctrl+G cycles through ungrouped, date, and project views. Group headings are not selectable. Changing the grouping keeps the same thread highlighted.
+The list contains thread rows and a search box. The current project starts grouped by date. All projects starts grouped by project. Each tab remembers its grouping choice. Project groups show the last-message date at the far right. Date groups show the project path there. Both include elapsed time since the last message. Dates use the system locale and timezone through `Intl.DateTimeFormat`. Invalid dates display `Unknown date`. Selection persists when the search, scope, grouping, or sort order changes. Group headings are not selectable. Changing grouping or sort order keeps the same thread highlighted.
 
 | Key | Behavior |
 | --- | --- |
 | Tab | Switches between the current project and all projects. |
-| Ctrl+G | Cycles grouping between none, date, and project. |
+| Ctrl+G | Cycles none and date for the current project, or none, date, and project for all projects. |
+| Shift+Up or Shift+Down | Sets ascending or descending order. |
+| Ctrl+T | Opens the highlighted thread in a full-screen transcript viewer. |
 | Up or Down | Moves the highlighted row. |
 | Page Up or Page Down | Moves by one page. |
 | Home or End | Moves to the first or last matching thread. |
@@ -53,7 +55,9 @@ The list contains thread rows and a search box. Each thread row starts with its 
 | Ctrl+D | Asks to delete the selected threads. With no selection, asks to delete the highlighted thread. |
 | Escape | Exits the picker without deleting unconfirmed selections. |
 
-Date groups use the last-modified calendar date in the local timezone, with the newest date first. Project groups use the full working directory path in alphabetical order. Within each group, threads appear newest first. Group headings repeat when you scroll within a group.
+Date groups use the last-modified calendar date in the local timezone, with the newest date first. Project groups use the full working directory path, with Z–A order by default. Within each group, threads appear newest first. Shift+Up sorts dates oldest first and projects A–Z. Shift+Down restores descending order. Group headings repeat when you scroll within a group.
+
+The transcript viewer includes all saved messages, thinking, tool calls, and tool results. Images appear as placeholders. Up and Down scroll, Page Up and Page Down move a page, and Home and End jump to the start or end. Escape, Ctrl+T, or Ctrl+C returns to the picker.
 
 In the confirmation view, Enter confirms deletion, N returns to the list, and Escape exits. Confirmation includes selections hidden by the current search or scope. The picker remains open after deletion and retains threads whose files could not be removed.
 

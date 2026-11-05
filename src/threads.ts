@@ -1,5 +1,6 @@
 import { access, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { readTranscript, ThreadTranscript } from './thread-transcript.ts';
 import { ThreadPicker } from './thread-picker.ts';
 import { SessionManager, type ExtensionAPI, type ExtensionCommandContext, type SessionInfo } from '@earendil-works/pi-coding-agent';
 import { errorMessage } from './shared.ts';
@@ -87,6 +88,13 @@ export default function threads(pi: ExtensionAPI): void {
             // Include the active project's custom session directory in the All scope.
             const combined = new Map([...sessions, ...project].map(session => [resolve(session.path), session]));
             return matchingSessions([...combined.values()], current, '').sort((a, b) => b.modified.getTime() - a.modified.getTime());
+          },
+          viewTranscript: async (session) => {
+            const text = await readTranscript(session.path);
+            await ctx.ui.custom<void>((viewerTui, _theme, _keys, close) => new ThreadTranscript(
+              session.name || session.firstMessage || session.id, text,
+              () => viewerTui.terminal.rows, () => close(), () => viewerTui.requestRender()),
+            { overlay: true, overlayOptions: { width: '100%', maxHeight: '100%', row: 0, col: 0, margin: 0 } });
           },
           query: args.trim(),
           theme,

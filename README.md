@@ -4,6 +4,7 @@ Quality of life tools for [Pi](https://pi.dev), bundled in one extension.
 
 ## Included features
 
+- [Configure the bundle](#configure-pi-qol) with domain tabs and individual feature switches in `/qol`.
 - [Answer interactive questions](#answer-questions) with single-choice, multiple-choice, and typed responses.
 - [Name new threads automatically](#name-threads) with a configurable model, effort, and prompt.
 - [Work toward a persistent goal](#work-toward-a-goal) across turns, with an optional token budget.
@@ -40,6 +41,26 @@ pi install git:github.com/thgilciffart/pi-qol
 ```
 
 Run `/reload` in an open Pi session.
+
+## Configure pi-qol
+
+Run `/qol` to configure the bundle. Tab or Shift+Tab switches between Threads, Agent, Display, and Tools. Use Up/Down to select a feature and Space or Enter to toggle it. Each row describes the commands, tools, or shortcuts it provides.
+
+Settings rows open the existing automatic naming, status line, and plugin manager editors. Those editors save their own settings independently. The main `/qol` editor keeps your pending feature switches while you use them.
+
+Press `s` or Ctrl+S to save feature switches and reload Pi. Escape cancels; if you have unsaved changes, press Escape again to discard them. When Pi is busy or has queued input, settings save for the next `/reload`.
+
+You can also change settings directly:
+
+```text
+/qol status
+/qol off auto-name
+/qol on auto-name
+/qol off domain:display
+/qol reset
+```
+
+Every feature starts enabled. Disabled features stop registering their commands, tools, event handlers, and shortcuts after reload. `/qol` remains available so you can enable them again. Choices apply across chats and projects. See the [settings reference](docs/qol.md) for domains, feature IDs, and storage.
 
 ## Answer questions
 
@@ -90,7 +111,7 @@ Type to search, use Up/Down to select an extension, and press Space to toggle it
 
 The picker opens global settings. Press Tab to switch to project settings, or run `/plugins project`. Project settings can enable, disable, or inherit a global extension. Pi must trust the project before you can change its settings.
 
-Plugin choices persist across sessions. The picker controls whole extensions, including their commands, tools, and event handlers. Features inside pi-qol remain bundled together.
+Plugin choices persist across sessions. The picker controls whole extensions, including their commands, tools, and event handlers. Use `/qol` to control individual features inside pi-qol.
 
 See the [plugin reference](docs/plugins.md) for scope behavior and reload details.
 

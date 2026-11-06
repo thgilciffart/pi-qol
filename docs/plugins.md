@@ -56,7 +56,7 @@ Other open Pi processes use the new settings after their next reload or restart.
 
 ## Scope limits
 
-The picker controls extensions. Skills, prompt templates, themes, and individual features inside pi-qol have no separate toggles here. Pi's built-in extensions and extensions supplied only through `-e` or SDK factories are outside this picker.
+The picker controls extensions. Skills, prompt templates, and themes have no separate toggles here. `/qol` controls individual bundled features through [domain tabs and feature switches](qol.md). Pi's built-in extensions and extensions supplied only through `-e` or SDK factories are outside this picker.
 
 Missing packages are skipped during discovery. The picker does not install or uninstall packages.
 

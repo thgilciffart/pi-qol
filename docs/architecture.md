@@ -1,11 +1,12 @@
 # Codebase map
 
-`index.ts` registers each feature once. Feature modules export a registration function that receives Pi's `ExtensionAPI`. Commands and events use the context supplied by Pi rather than a shared global context.
+`index.ts` reads the bundle settings and registers each enabled feature once. Feature modules export a registration function that receives Pi's `ExtensionAPI`. Commands and events use the context supplied by Pi rather than a shared global context. `/qol` always registers, including when every bundled feature is disabled.
 
 ## Feature modules
 
 | Feature | Entry point | Supporting code | Interface |
 | --- | --- | --- | --- |
+| Bundle settings | [`src/qol/index.ts`](../src/qol/index.ts) | `features.ts` groups the features into domains. `config.ts` validates and stores feature switches. `editor.ts` draws the domain tabs. `registry.ts` collects registered commands so settings rows reuse existing editors. Saving switches reloads Pi when idle. | `/qol` |
 | Goals | [`src/goal/index.ts`](../src/goal/index.ts) | `model.ts` defines persisted data and validation. `state.ts` defines transient run state. `commands.ts` parses commands, `prompts.ts` holds agent instructions, `format.ts` formats values, and `ui.ts` wraps the composer. | `/goal`, `create_goal`, `get_goal`, `update_goal` |
 | Automatic names | [`src/auto-name.ts`](../src/auto-name.ts) | [`auto-name-picker.ts`](../src/auto-name-picker.ts) adapts Pi's model selector. | `/auto-name` |
 | Plugins | [`src/plugins/index.ts`](../src/plugins/index.ts) | Discovers installed extensions, preserves configured discovery paths, saves Pi resource settings, and reloads. `draft.ts` keeps edits in memory until Ctrl+S. `native-picker.ts` adapts Pi's resource selector. `compact-list.ts` renders single-row packages and folder trees and advances selection after toggles. | `/plugins` |
@@ -26,6 +27,7 @@
 
 | Owner | Data | Storage |
 | --- | --- | --- |
+| Bundle settings | Enabled features, defaulting to all enabled | `<agent directory>/pi-qol/qol.json` |
 | Goals | Objective, status, budget, token usage, elapsed time, and turn count | `pi-qol-goal` custom session entries |
 | Goal continuation | Hidden requests to continue the active goal | `pi-qol-goal-continuation` custom messages |
 | Response statistics | Input, output, cost, TTFT, duration, and token rate | `pi-qol-metrics` custom session entries |

@@ -159,6 +159,8 @@ Pi reserves Alt+P for previous-model cycling. To free the shortcut, add this ent
 
 Use `/ephemeral explain this repository` to include an initial prompt. Ephemeral mode controls session history. Exports and files created by tools still write to disk.
 
+Once an ephemeral chat contains a message, `/save` appears in the command list. It writes the chat to a new session file in the usual sessions directory and turns the chat into a normal saved session, so later messages append to the file and the ephemeral badge clears. `/save` is only listed while an ephemeral chat has messages.
+
 ## Open a thread
 
 Run `/open` to pick a saved thread and switch to it. Add search text to filter the list as it opens, for example `/open login bug`. Pi's `/resume` still works and is unchanged.

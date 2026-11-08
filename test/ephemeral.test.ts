@@ -10,11 +10,15 @@ const RETURN_ENTRY = 'pi-qol-ephemeral-return';
 
 class FakeSessionManager {
   sessionDir = '/tmp/pi-sessions';
+  flushed = false;
   entries: any[] = [];
   constructor(public persist: boolean, public sessionFile: string | undefined) {}
   isPersisted() { return this.persist; }
   getSessionFile() { return this.sessionFile; }
   getSessionDir() { return this.sessionDir; }
+  getCwd() { return '/tmp/pi-qol-test'; }
+  getSessionId() { return 'fake-session-id'; }
+  getHeader() { return { type: 'session', version: 3, id: 'fake-session-id', timestamp: '2026-01-01T00:00:00.000Z', cwd: '/tmp/pi-qol-test' }; }
   getEntries() { return this.entries; }
   appendCustomEntry(customType: string, data: unknown) {
     const id = String(this.entries.length + 1);
@@ -44,7 +48,8 @@ interface HarnessOptions {
 function createHarness(options: HarnessOptions = {}) {
   const recorded = { notifications: [] as { message: string; type?: string }[], statuses: [] as { key: string; text?: string }[],
     confirmations: 0, newSessions: 0, sentMessages: [] as string[], nextManagers: [] as any[], switched: [] as string[],
-    dispatches: [] as Promise<void>[], shortcutPrompts: [] as { text: string; options: unknown }[] };
+    dispatches: [] as Promise<void>[], shortcutPrompts: [] as { text: string; options: unknown }[],
+    autocompleteRefreshes: 0, idleWaits: 0 };
   const commands = new Map<string, any>();
   const handlers = new Map<string, any>();
   const shortcuts = new Map<string, any>();
@@ -58,10 +63,12 @@ function createHarness(options: HarnessOptions = {}) {
     notify: (message: string, type?: string) => { recorded.notifications.push({ message, type }); },
     setStatus: (key: string, text: string | undefined) => { recorded.statuses.push({ key, text }); },
     confirm: async () => { recorded.confirmations++; throw new Error('Toggling must not ask for confirmation'); },
+    addAutocompleteProvider: (factory: any) => { recorded.autocompleteRefreshes++; factory({}); },
   };
   function ctx(current = manager): any {
     return { mode: 'tui', hasUI: true, cwd: '/tmp/pi-qol-test', sessionManager: current, ui,
       isIdle: () => options.idle ?? true, hasPendingMessages: () => options.pending ?? false,
+      waitForIdle: async () => { recorded.idleWaits++; },
       newSession: async (callbacks: any) => {
         recorded.newSessions++;
         if (options.newGate) await options.newGate;
@@ -240,6 +247,88 @@ describe('/ephemeral', () => {
     const saved = createHarness();
     await saved.handlers.get('session_start')({ type: 'session_start' }, saved.ctx());
     expect(saved.recorded.statuses.at(-1)).toEqual({ key: 'ephemeral', text: undefined });
+  });
+});
+
+describe('/save', () => {
+  const userMessage = { type: 'message', message: { role: 'user', content: 'secret plans' } };
+
+  test('is not offered in a saved session or in an empty ephemeral chat', async () => {
+    const saved = createHarness();
+    await saved.handlers.get('session_start')({ type: 'session_start' }, saved.ctx());
+    expect(saved.commands.has('save')).toBe(false);
+
+    const empty = createHarness({ persistent: false });
+    await empty.handlers.get('session_start')({ type: 'session_start' }, empty.ctx());
+    expect(empty.commands.has('save')).toBe(false);
+    expect(empty.recorded.autocompleteRefreshes).toBe(0);
+  });
+
+  test('appears at session start when the ephemeral chat already has messages', async () => {
+    const h = createHarness({ persistent: false, entries: [userMessage] });
+    await h.handlers.get('session_start')({ type: 'session_start' }, h.ctx());
+    expect(h.commands.has('save')).toBe(true);
+    expect(h.commands.get('save').description).toContain('ephemeral');
+  });
+
+  test('appears once a run ends in an ephemeral chat and refreshes the command picker', async () => {
+    const h = createHarness({ persistent: false });
+    await h.handlers.get('session_start')({ type: 'session_start' }, h.ctx());
+    expect(h.commands.has('save')).toBe(false);
+    h.manager().entries.push(userMessage);
+    await h.handlers.get('agent_end')({ type: 'agent_end' }, h.ctx());
+    expect(h.commands.has('save')).toBe(true);
+    expect(h.recorded.autocompleteRefreshes).toBe(1);
+    // Later runs do not re-register or refresh again.
+    await h.handlers.get('turn_end')({ type: 'turn_end' }, h.ctx());
+    expect(h.recorded.autocompleteRefreshes).toBe(1);
+  });
+
+  test('writes the ephemeral chat to a new session file and turns it into a saved session', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pi-qol-save-'));
+    const create = spyOn(SessionManager, 'create').mockReturnValue({ getSessionDir: () => dir } as SessionManager);
+    try {
+      const h = createHarness({ persistent: false, entries: [userMessage] });
+      h.manager().sessionDir = ''; // in-memory managers have no session dir
+      await h.handlers.get('session_start')({ type: 'session_start' }, h.ctx());
+      await h.commands.get('save').handler('', h.ctx());
+
+      const manager = h.manager();
+      expect(manager.isPersisted()).toBe(true);
+      const path = manager.getSessionFile();
+      expect(path!.startsWith(`${dir}/`)).toBe(true);
+      expect(path!.endsWith('_fake-session-id.jsonl')).toBe(true);
+      expect(/\d{4}-\d{2}-\d{2}T/.test(path!)).toBe(true);
+      expect(manager.getSessionDir()).toBe(dir);
+      const lines = (await readFile(path!, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(lines[0].type).toBe('session');
+      expect(lines.slice(1)).toEqual([userMessage]);
+      expect(h.recorded.idleWaits).toBe(1);
+      expect(h.recorded.notifications.at(-1)).toEqual({ message: `Saved this chat to ${path}`, type: 'info' });
+      expect(h.recorded.statuses.at(-1)).toEqual({ key: 'ephemeral', text: undefined });
+    } finally {
+      create.mockRestore();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses to save again after the chat is already on disk', async () => {
+    const h = createHarness({ persistent: false, entries: [userMessage] });
+    await h.handlers.get('session_start')({ type: 'session_start' }, h.ctx());
+    h.manager().persist = true; // saved by an earlier /save
+    h.manager().sessionFile = '/tmp/pi-sessions/saved.jsonl';
+    await h.commands.get('save').handler('', h.ctx());
+    expect(h.recorded.notifications.at(-1)?.message).toContain('already saved');
+    expect(h.recorded.idleWaits).toBe(0);
+  });
+
+  test('refuses when the ephemeral chat has no messages yet', async () => {
+    const h = createHarness({ persistent: false, entries: [userMessage] });
+    await h.handlers.get('session_start')({ type: 'session_start' }, h.ctx());
+    h.manager().entries = []; // messages removed since registration
+    await h.commands.get('save').handler('', h.ctx());
+    expect(h.recorded.notifications.at(-1)?.message).toContain('Nothing to save yet');
+    expect(h.manager().isPersisted()).toBe(false);
   });
 });
 

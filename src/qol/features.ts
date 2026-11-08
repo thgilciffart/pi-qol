@@ -36,7 +36,7 @@ export interface QolFeature {
 export const FEATURES = [
   { id: 'threads', domain: 'threads', label: 'Thread management', provides: '/open, /delete, /delete-threads pickers' },
   { id: 'auto-name', domain: 'threads', label: 'Automatic naming', provides: '/auto-name, names new threads', settingsCommand: 'auto-name' },
-  { id: 'ephemeral', domain: 'threads', label: 'Ephemeral chats', provides: '/ephemeral, Alt+P private chats' },
+  { id: 'ephemeral', domain: 'threads', label: 'Ephemeral chats', provides: '/ephemeral, Alt+P private chats, /save' },
   { id: 'goal', domain: 'agent', label: 'Goals', provides: '/goal, get_goal/create_goal/update_goal tools' },
   { id: 'continue', domain: 'agent', label: 'Continue turn', provides: '/continue, Ctrl+Alt+C' },
   { id: 'thinking', domain: 'agent', label: 'Thinking shortcuts', provides: 'Alt+, and Alt+. thinking levels' },

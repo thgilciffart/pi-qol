@@ -97,6 +97,30 @@ test("messages render with Pi's own components, including Markdown, thinking, to
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test('system prompts render as readable text, never as raw JSON', async () => {
+  const entries = [
+    { type: 'session', cwd: '/project' },
+    message({ role: 'system', content: '', sections: { preamble: 'You are helpful.', rules: 'Be **safe**.' } }),
+    message({ role: 'system', content: 'Plain prompt text' }),
+    message({ role: 'user', content: 'hi' }),
+  ];
+  const { dir, path } = await sessionFile(entries);
+  try {
+    const transcript = await readTranscript(path);
+    expect(transcript.items.map(item => item.kind)).toEqual(['system', 'system', 'user']);
+    const raw = new ThreadTranscript({ title: 'Sys', transcript, theme, tui: regularTui(30), cwd: '/project', done() {} }).render(80);
+    const rendered = plain(raw);
+    expect(rendered).toContain('System');
+    expect(rendered).toContain('preamble');
+    expect(rendered).toContain('You are helpful.');
+    expect(rendered).toContain('Be safe.');
+    expect(rendered).toContain('Plain prompt text');
+    // No raw JSON of the saved message reaches the terminal.
+    for (const json of ['"role"', '"sections"', '"preamble":', '"content":']) expect(raw.join('')).not.toContain(json);
+    expect(rendered).not.toContain('**safe**');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 const longTranscript = (rows = 100): Transcript => ({ messages: 1, skipped: 0, items: [
   { kind: 'user', text: Array.from({ length: rows }, (_, index) => `Message row ${index}`).join('\n\n') }] });
 const toolTranscript = (): Transcript => ({ messages: 2, skipped: 0, items: [{ kind: 'tool', id: 'c', name: 'bash', args: { command: 'seq 40' },

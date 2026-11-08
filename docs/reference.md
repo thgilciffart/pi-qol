@@ -30,6 +30,7 @@ Statistics rows persist as custom session entries and never enter model context.
 | `/open [search text]` | Opens the [thread picker](#thread-picker-keys) in open mode. Enter closes the picker, then switches to the highlighted thread with `ctx.switchSession`. Escape cancels. Pi's `/resume` is unchanged. |
 | `/delete-threads [search text]` | Opens a searchable picker for saved threads. Starts in the current project. Tab switches between project and all projects. |
 | `/ephemeral [prompt]` | Immediately starts an in-memory chat and sends the optional prompt. With no prompt, an empty, idle ephemeral chat returns to the previous saved chat. Chats that contain messages remain private. |
+| `/save` | Saves an ephemeral chat that already contains messages to a new session file and turns it into a normal saved session. The command is only listed while an ephemeral chat has messages. |
 | `/better-export [flags] [file.html]` | Saves an HTML export of a file-backed session. |
 
 `/continue` and Ctrl+Alt+C start a new model request from the active conversation using a hidden continuation cue. They do not add a user message, clear the editor draft, or reconnect the cancelled stream. They leave goal status unchanged. Empty conversations, busy sessions, and sessions with queued input are not continued.
@@ -77,6 +78,7 @@ The transcript viewer is read-only. It shows every message entry in the saved se
 | Shell command (`!`) | Command, output, and exit status. |
 | Extension message | Pi's default view of the message type, including messages hidden from the chat. Extension renderers are not used. |
 | Compaction or branch summary | The full summary text. |
+| System prompt | The prompt as text. Saved `sections` appear as labeled Markdown blocks. Never raw JSON. |
 | Unknown message role | The role name and the message content as text or JSON. |
 
 The viewer strips terminal escape sequences and control characters from all saved text before display. Image data is dropped when the file is read, so tool results show Pi's image placeholder. Lines that are not valid JSON are skipped, and the viewer reports how many it skipped. If the file cannot be read, the picker shows the error.

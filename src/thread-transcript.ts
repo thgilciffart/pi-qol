@@ -24,6 +24,7 @@ export type TranscriptItem =
       fullOutputPath?: string; excludeFromContext: boolean }
   | { kind: 'custom'; customType: string; content: string | (ResultBlock & { type: 'text' | 'image' })[]; display: boolean;
       details?: unknown; timestamp: number }
+  | { kind: 'system'; text: string; timestamp: number }
   | { kind: 'compaction'; summary: string; tokensBefore: number; timestamp: number }
   | { kind: 'branch'; summary: string; fromId: string | null; timestamp: number }
   | { kind: 'other'; label: string; text: string };
@@ -69,6 +70,19 @@ function contentText(content: unknown): string {
   return blocks(content).map(block => block.type === 'text' ? text(block.text)
     : block.type === 'image' ? `[Image: ${text(block.mimeType, 'image')}]`
     : JSON.stringify(block, null, 2)).filter(Boolean).join('\n');
+}
+
+/**
+ * Readable text for a saved system message. Pi stores the prompt as `content` or, in
+ * current session versions, as named `sections`. Both render as text, never as JSON.
+ */
+function systemText(message: Record<string, unknown>): string {
+  const content = contentText(message.content);
+  if (content) return content;
+  const sections = record(message.sections);
+  const parts = Object.entries(sections).map(([label, value]) =>
+    `**${label}**\n\n${typeof value === 'string' ? value : JSON.stringify(value, null, 2)}`);
+  return parts.filter(Boolean).join('\n\n');
 }
 
 function resultBlocks(content: unknown): ResultBlock[] {
@@ -144,6 +158,8 @@ export async function readTranscript(path: string): Promise<Transcript> {
     } else if (role === 'custom') {
       items.push({ kind: 'custom', customType: text(message.customType, 'custom'), content: message.content as never ?? '',
         display: message.display !== false, details: message.details, timestamp: number(message.timestamp, timestamp) });
+    } else if (role === 'system') {
+      items.push({ kind: 'system', text: systemText(message), timestamp });
     } else if (role === 'compactionSummary') {
       items.push({ kind: 'compaction', summary: text(message.summary), tokensBefore: number(message.tokensBefore, 0), timestamp });
     } else if (role === 'branchSummary') {
@@ -317,6 +333,8 @@ export class ThreadTranscript implements Component, Focusable {
       }
       case 'custom': return agent.CustomMessageComponent && new agent.CustomMessageComponent({ role: 'custom', customType: item.customType,
         content: item.content as never, display: item.display, details: item.details, timestamp: item.timestamp }, undefined, markdown);
+      // Pi hides system prompts in the chat, so there is no native component; the plain renderer below shows the text.
+      case 'system': return undefined;
       case 'compaction': return agent.CompactionSummaryMessageComponent && new agent.CompactionSummaryMessageComponent({ role: 'compactionSummary',
         summary: item.summary, tokensBefore: item.tokensBefore, timestamp: item.timestamp }, markdown);
       case 'branch': return agent.BranchSummaryMessageComponent && new agent.BranchSummaryMessageComponent({ role: 'branchSummary',
@@ -347,6 +365,7 @@ export class ThreadTranscript implements Component, Focusable {
       }
       case 'bash': label = `$ ${item.command}`; body = item.output; markdown = false; break;
       case 'custom': label = item.customType; body = contentText(item.content); break;
+      case 'system': label = 'System'; body = item.text; color = 'muted'; break;
       case 'compaction': label = 'Compaction summary'; body = item.summary; break;
       case 'branch': label = 'Branch summary'; body = item.summary; break;
       case 'other': label = item.label; body = item.text; markdown = false; break;
@@ -385,7 +404,7 @@ export class ThreadTranscript implements Component, Focusable {
     if (skipped) lines.push(this.options.theme.fg('warning', `  ${skipped} unreadable line${skipped === 1 ? '' : 's'} skipped`), '');
     items.forEach((item, index) => {
       // Pi separates user messages and summaries from the preceding message with one blank row.
-      if (index && ['user', 'compaction', 'branch', 'other'].includes(item.kind)) lines.push('');
+      if (index && ['user', 'system', 'compaction', 'branch', 'other'].includes(item.kind)) lines.push('');
       lines.push(...this.itemRows(index, width));
     });
     if (!items.length) lines.push(this.options.theme.fg('muted', '  No saved messages.'));

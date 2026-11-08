@@ -80,7 +80,7 @@ async function fixture() {
 test('/open is registered beside /delete-threads and does not replace /resume', () => {
   const h = harness(SessionManager.inMemory());
   expect([...h.commands.keys()].sort()).toEqual(['delete', 'delete-threads', 'open']);
-  expect(h.commands.get('open').description).toMatch(/open a saved thread/i);
+  expect(h.commands.get('open').description).toMatch(/resume an existing thread/i);
 });
 
 test('enter closes the picker before switching to the highlighted thread, and the current thread is not listed', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@thgilciffart/pi-qol",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Interactive questions, automatic thread names, persistent goals, metrics, and HTML exports for Pi",
   "type": "module",
   "license": "MIT",

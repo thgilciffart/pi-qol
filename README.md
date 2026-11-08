@@ -1,6 +1,6 @@
 # pi-qol
 
-Quality of life tools for [Pi](https://pi.dev), bundled in one extension.
+pi-qol adds interactive questions, automatic thread names, persistent goals, metrics, and HTML exports to [Pi](https://pi.dev).
 
 ## Included features
 
@@ -34,7 +34,13 @@ pi remove npm:pi-better-export
 
 If you installed `pi-ask-questions` from npm, use `pi remove npm:pi-ask-questions` instead. For extensions loaded through a local path or settings file, remove those entries.
 
-Install pi-qol:
+Install pi-qol from npm:
+
+```sh
+pi install npm:@thgilciffart/pi-qol
+```
+
+To install the development version from git instead, run:
 
 ```sh
 pi install git:github.com/thgilciffart/pi-qol
@@ -117,7 +123,7 @@ See the [plugin reference](docs/plugins.md) for scope behavior and reload detail
 
 ## Customise the status line
 
-Run `/statusline` to open the status line editor. Choose which modules appear, place them on the left or right of any row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1`–`9` to choose a row, `+`/`-` to move between rows, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
+Run `/statusline` to open the status line editor. Choose which modules appear, place them on the left or right of any row, change their order, and preview the result before saving. Use Left/Right to choose a side, `1` to `9` to choose a row, `+`/`-` to move between rows, and Shift+Up/Down or `[`/`]` to reorder. Colour separates the model, thinking level, context remaining, and other values. A monochrome option is available.
 
 Select an external module and press `t` or `T` to cycle its colour forward or backward. Each module can use a named colour or keep the extension's original styling.
 

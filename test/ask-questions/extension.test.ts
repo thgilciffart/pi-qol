@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "bun:test";
 import type { ExtensionAPI, ExtensionToolContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
@@ -6,14 +9,22 @@ import type { AskResult } from "../../src/ask-questions/questions.ts";
 import extension from "../../src/ask-questions/extension.ts";
 
 /** Register the extension against a minimal fake API and capture definitions. */
-function loadExtension() {
+function loadExtension(configPath?: string) {
 	let tool: any;
+	let activeTools = ["read", "bash", "edit", "write"];
+	// Isolate from the real agent dir: a missing file means default settings.
+	const settingsPath = configPath ?? join(mkdtempSync(join(tmpdir(), "pi-qol-ask-questions-")), "ask-questions.json");
 	const commands: Array<{ name: string; description?: string; handler: any }> = [];
 	const messages: Array<{ message: any; options: any }> = [];
 	const handlers = new Map<string, Array<(...args: any[]) => any>>();
 	const pi = {
-		registerTool: (definition: unknown) => {
+		registerTool: (definition: any) => {
 			tool = definition;
+			activeTools = [...activeTools, definition.name];
+		},
+		getActiveTools: () => [...activeTools],
+		setActiveTools: (names: string[]) => {
+			activeTools = [...names];
 		},
 		registerCommand: (name: string, definition: { description?: string; handler?: any }) => {
 			commands.push({ name, description: definition.description, handler: definition.handler });
@@ -28,13 +39,13 @@ function loadExtension() {
 			messages.push({ message, options });
 		},
 	} as unknown as ExtensionAPI;
-	extension(pi);
+	extension(pi, { configPath: settingsPath });
 	const emit = (event: string, payload: unknown = { type: event }, ctx?: unknown) => {
 		for (const handler of handlers.get(event) ?? []) {
 			handler(payload, ctx);
 		}
 	};
-	return { tool, commands, messages, handlers, emit };
+	return { tool, commands, messages, handlers, emit, getActiveTools: () => [...activeTools] };
 }
 
 const theme = {
@@ -448,5 +459,35 @@ describe("ask_user modes", () => {
 		host.resolve();
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		assert.equal(messages.length, 0, "answers from an earlier session id must never steer the switched session");
+	});
+});
+
+describe("ask_user exposure", () => {
+	function tuiOnlyConfigPath(): string {
+		const dir = mkdtempSync(join(tmpdir(), "pi-qol-ask-questions-"));
+		const configPath = join(dir, "ask-questions.json");
+		writeFileSync(configPath, JSON.stringify({ version: 1, expose: "tui" }));
+		return configPath;
+	}
+
+	it("stays active in RPC mode by default", () => {
+		const { emit, getActiveTools } = loadExtension();
+		emit("session_start", { type: "session_start" }, { mode: "rpc", hasUI: true, ui: {} });
+		assert.ok(getActiveTools().includes("ask_user"));
+	});
+
+	it("is removed from the active tools outside the TUI when expose is tui", () => {
+		const { emit, getActiveTools } = loadExtension(tuiOnlyConfigPath());
+		emit("session_start", { type: "session_start" }, { mode: "rpc", hasUI: true, ui: {} });
+		assert.ok(!getActiveTools().includes("ask_user"), "ask_user is hidden in RPC mode");
+		assert.ok(getActiveTools().includes("read"), "other tools are untouched");
+		emit("session_start", { type: "session_start" }, { mode: "print", hasUI: false, ui: {} });
+		assert.ok(!getActiveTools().includes("ask_user"), "ask_user stays hidden in print mode");
+	});
+
+	it("stays active in the TUI when expose is tui", () => {
+		const { emit, getActiveTools } = loadExtension(tuiOnlyConfigPath());
+		emit("session_start", { type: "session_start" }, { mode: "tui", hasUI: true, ui: {} });
+		assert.ok(getActiveTools().includes("ask_user"));
 	});
 });

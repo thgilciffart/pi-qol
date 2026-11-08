@@ -8,7 +8,7 @@ Pi-qol bundles the `ask_user` tool from [pi-ask-questions](https://github.com/th
 
 `mode: "background"` is the default. In Pi's terminal UI, the tool returns immediately while the questionnaire remains open. Submitted answers enter Pi's steering queue at the next model or tool boundary. They do not interrupt a running response or tool. Submission after the parent stops starts a new turn. Only one background questionnaire can be open.
 
-`mode: "urgent"` waits for answers or cancellation. RPC uses sequential selection and input dialogs and waits in either mode. Print and JSON modes return the questions for the parent to ask as text.
+`mode: "urgent"` waits for answers or cancellation. RPC (for example T3 Code, which runs Pi with `--mode rpc`) uses sequential selection and input dialogs and waits in either mode: each question is one dialog, a single-choice question submits as soon as an option is picked, and multi-select questions toggle `[x]`/`[ ]` markers across dialogs until Done. Print and JSON modes return the questions for the parent to ask as text.
 
 The compatibility field `noWait` selects background mode when `true` and urgent mode when `false`. An explicit `mode` takes precedence. Switching or closing sessions cancels pending questionnaires so answers cannot reach another conversation.
 
@@ -67,6 +67,19 @@ Top-level `title` and `submitLabel` customize the questionnaire title and submit
 Results include a text summary and `structuredContent` containing `cancelled`, optional `pending`, and `answers`. Each answer contains `id`, `question`, `skipped`, and an array of `{ value, label, custom }` selections.
 
 While `pending` is true, answer arrays are empty. Completed background answers arrive as steering text. Cancellation does not submit preselected choices as answers.
+
+## Configuration
+
+Optional settings live in `<agent dir>/pi-qol/ask-questions.json` (default `~/.pi/agent/pi-qol/ask-questions.json`):
+
+```json
+{ "version": 1, "expose": "tui" }
+```
+
+- `"expose": "all"` (default): the tool is exposed in every mode.
+- `"expose": "tui"`: the tool is only declared to the model in Pi's terminal UI. In RPC hosts such as T3 Code (which runs Pi with `--mode rpc`) and in print/JSON modes, `ask_user` is removed from the active tool set at session start, so the model asks in prose instead. The tool stays registered for direct/codemode calls and still uses the dialog fallback there.
+
+To disable the questionnaire entirely (all modes), use `/qol off ask-questions` or set `"ask-questions": false` in `pi-qol/qol.json`.
 
 ## Migration
 

@@ -29,8 +29,22 @@ const CUSTOM = "Type something… (type an answer)";
 const OPTIONS = [{ label: "Alpha" }, { label: "Beta" }];
 
 describe("RPC questionnaire fallback", () => {
-	it("keeps a single selection open so a typed extra answer can be added", async () => {
-		const { ui } = dialogs([0, CUSTOM, "Done"], ["  extra context  "]);
+	it("answers a single-choice question with one dialog when an option is picked", async () => {
+		const { ui } = dialogs([(choices) => {
+			assert.deepEqual(choices, ["Alpha", "Beta", "Done", CUSTOM]);
+			return choices[1];
+		}]);
+		const result = await runFallbackSurvey(ui, normalizeQuestions({
+			questions: [{ question: "Choose", options: OPTIONS }],
+		}));
+		assert.equal(result.cancelled, false);
+		assert.deepEqual(result.answers[0]?.entries, [
+			{ value: "Beta", label: "Beta", custom: false },
+		]);
+	});
+
+	it("adds a typed answer entered before the picked option", async () => {
+		const { ui } = dialogs([CUSTOM, 0], ["  extra context  "]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose and explain", options: OPTIONS }],
 		}));
@@ -41,18 +55,7 @@ describe("RPC questionnaire fallback", () => {
 		]);
 	});
 
-	it("replaces a single listed selection without losing the typed answer", async () => {
-		const { ui } = dialogs([0, CUSTOM, 1, "Done"], ["explanation"]);
-		const result = await runFallbackSurvey(ui, normalizeQuestions({
-			questions: [{ question: "Choose", options: OPTIONS }],
-		}));
-		assert.deepEqual(result.answers[0]?.entries, [
-			{ value: "Beta", label: "Beta", custom: false },
-			{ value: "explanation", label: "explanation", custom: true },
-		]);
-	});
-
-	it("supports a typed answer without a listed selection", async () => {
+	it("supports a typed answer without a listed selection via Done", async () => {
 		const { ui } = dialogs([CUSTOM, "Done"], ["Something else"]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose", options: OPTIONS }],
@@ -62,34 +65,8 @@ describe("RPC questionnaire fallback", () => {
 		]);
 	});
 
-	it("preserves only the first preset on single-choice questions", async () => {
-		const { ui } = dialogs([(choices) => {
-			assert.equal(choices[0], "(•) 1. Alpha");
-			assert.equal(choices[1], "( ) 2. Beta");
-			return "Done";
-		}]);
-		const result = await runFallbackSurvey(ui, normalizeQuestions({
-			questions: [{ question: "Choose", options: OPTIONS.map((option) => ({ ...option, selected: true })) }],
-		}));
-		assert.deepEqual(result.answers[0]?.entries.map((entry) => entry.value), ["Alpha"]);
-	});
-
-	it("clears a preset single option while retaining the typed answer", async () => {
-		const { ui } = dialogs([CUSTOM, 0, (choices) => {
-			assert.equal(choices[0], "( ) 1. Alpha");
-			return "Done";
-		}], ["custom alone"]);
-		const result = await runFallbackSurvey(ui, normalizeQuestions({
-			questions: [{ question: "Choose", options: [{ label: "Alpha", selected: true }] }],
-		}));
-		assert.equal(result.cancelled, false);
-		assert.deepEqual(result.answers[0]?.entries, [
-			{ value: "custom alone", label: "custom alone", custom: true },
-		]);
-	});
-
-	it("edits and clears the extra answer without clearing the selected option", async () => {
-		const { ui } = dialogs([0, CUSTOM, CUSTOM, CUSTOM, "Done"], ["first", "replacement", "  "]);
+	it("edits and clears the typed answer before picking an option", async () => {
+		const { ui } = dialogs([CUSTOM, CUSTOM, CUSTOM, 0], ["first", "replacement", "  "]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose", options: OPTIONS }],
 		}));
@@ -98,7 +75,19 @@ describe("RPC questionnaire fallback", () => {
 		]);
 	});
 
-	it("keeps multi-select validation and accepts a typed answer alongside selections", async () => {
+	it("submits the first preset on single-choice questions when Done is chosen", async () => {
+		const { ui } = dialogs([(choices) => {
+			assert.equal(choices[0], "Alpha");
+			assert.equal(choices[1], "Beta");
+			return "Done";
+		}]);
+		const result = await runFallbackSurvey(ui, normalizeQuestions({
+			questions: [{ question: "Choose", options: OPTIONS.map((option) => ({ ...option, selected: true })) }],
+		}));
+		assert.deepEqual(result.answers[0]?.entries.map((entry) => entry.value), ["Alpha"]);
+	});
+
+	it("keeps multi-select markers and validation and accepts a typed answer alongside selections", async () => {
 		const { ui, notifications } = dialogs([0, "Done", CUSTOM, "Done"], ["extra"]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose two", multiple: true, min: 2, options: OPTIONS }],
@@ -107,8 +96,8 @@ describe("RPC questionnaire fallback", () => {
 		assert.deepEqual(result.answers[0]?.entries.map((entry) => entry.value), ["Alpha", "extra"]);
 	});
 
-	it("requires an answer before Done on a required question", async () => {
-		const { ui, notifications } = dialogs(["Done", 1, "Done"]);
+	it("requires an answer before accepting Done on a required question", async () => {
+		const { ui, notifications } = dialogs(["Done", 1]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose", options: OPTIONS, allowOther: false }],
 		}));
@@ -125,8 +114,25 @@ describe("RPC questionnaire fallback", () => {
 		assert.equal(result.answers[0]?.skipped, true);
 	});
 
+	it("skips an optional question through the skip entry", async () => {
+		const { ui } = dialogs(["Skip this question"]);
+		const result = await runFallbackSurvey(ui, normalizeQuestions({
+			questions: [{ question: "Choose", options: OPTIONS, required: false, allowOther: false }],
+		}));
+		assert.equal(result.cancelled, false);
+		assert.equal(result.answers[0]?.skipped, true);
+	});
+
+	it("cancels when the select dialog is dismissed", async () => {
+		const { ui } = dialogs([undefined]);
+		const result = await runFallbackSurvey(ui, normalizeQuestions({
+			questions: [{ question: "Choose", options: OPTIONS }],
+		}));
+		assert.equal(result.cancelled, true);
+	});
+
 	it("cancels when the custom answer dialog is dismissed", async () => {
-		const { ui } = dialogs([0, CUSTOM], [undefined]);
+		const { ui } = dialogs([CUSTOM], [undefined]);
 		const result = await runFallbackSurvey(ui, normalizeQuestions({
 			questions: [{ question: "Choose", options: OPTIONS }],
 		}));

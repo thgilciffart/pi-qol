@@ -2,6 +2,12 @@
  * Sequential fallback for modes that have dialogs but no custom terminal
  * components (currently RPC). The full tabbed UI is only available in TUI
  * mode; here every question is asked with `select`/`input` instead.
+ *
+ * RPC hosts (for example T3 Code) render each dialog as a fresh, stateless
+ * single-choice question, so single-choice questions use plain option labels
+ * and submit as soon as an option is picked. Multi-select keeps selection
+ * markers and a Done entry, because the markers are the only way to carry
+ * the selection across independent dialogs.
  */
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -45,6 +51,11 @@ export async function runFallbackSurvey(
 
 type DialogOptions = { signal: AbortSignal } | undefined;
 
+/** Dialog title: the question text plus its optional header context. */
+function titleFor(question: NormalizedQuestion): string {
+	return question.header ? `${question.question}\n${question.header}` : question.question;
+}
+
 async function askFreeForm(
 	ui: FallbackUI,
 	question: NormalizedQuestion,
@@ -52,7 +63,7 @@ async function askFreeForm(
 	options: DialogOptions,
 ): Promise<boolean> {
 	while (true) {
-		const typed = await ui.input(question.question, question.placeholder ?? "", options);
+		const typed = await ui.input(titleFor(question), question.placeholder ?? "", options);
 		if (typed === undefined) {
 			return false;
 		}
@@ -87,21 +98,34 @@ async function askOptions(
 	const customLabel = `${question.otherLabel} (type an answer)`;
 	const skipLabel = "Skip this question";
 
+	const choices = (): string[] => {
+		const optionLabels = question.options.map((option, index) =>
+			question.multiple
+				? `${selected.has(index) ? "[x]" : "[ ]"} ${index + 1}. ${option.label}`
+				: option.label,
+		);
+		return [
+			...optionLabels,
+			doneLabel,
+			...(question.allowOther ? [customLabel] : []),
+			...(!question.required ? [skipLabel] : []),
+		];
+	};
+
+	/** Validate and store the current entries; returns false to re-ask. */
+	const submit = (entries: AnswerEntry[], skipped: boolean): boolean => {
+		const error = answerError(question, makeAnswer(question, entries, skipped));
+		if (error) {
+			ui.notify(error, "warning");
+			return false;
+		}
+		answers.set(question.id, makeAnswer(question, entries, skipped));
+		return true;
+	};
+
 	while (true) {
-		const optionLabels = question.options.map((option, index) => {
-			const marker = question.multiple
-				? (selected.has(index) ? "[x]" : "[ ]")
-				: (selected.has(index) ? "(•)" : "( )");
-			return `${marker} ${index + 1}. ${option.label}`;
-		});
-		const choices = [...optionLabels, doneLabel];
-		if (question.allowOther) {
-			choices.push(customLabel);
-		}
-		if (!question.required) {
-			choices.push(skipLabel);
-		}
-		const choice = await ui.select(question.question, choices, options);
+		const currentChoices = choices();
+		const choice = await ui.select(titleFor(question), currentChoices, options);
 		if (choice === undefined) {
 			return false;
 		}
@@ -110,7 +134,7 @@ async function askOptions(
 			return true;
 		}
 		if (choice === customLabel) {
-			const typed = await ui.input(question.question, question.placeholder ?? "", options);
+			const typed = await ui.input(titleFor(question), question.placeholder ?? "", options);
 			if (typed === undefined) {
 				return false;
 			}
@@ -120,34 +144,35 @@ async function askOptions(
 			custom = value ? { value, label: value, custom: true } : undefined;
 			continue;
 		}
-		if (choice === doneLabel) {
-			const entries: AnswerEntry[] = [
-				...question.options
-					.filter((_, index) => selected.has(index))
-					.map((option) => ({ value: option.value, label: option.label, custom: false })),
-				...(custom ? [custom] : []),
-			];
-			const error = answerError(question, makeAnswer(question, entries));
-			if (error) {
-				ui.notify(error, "warning");
-				continue;
-			}
-			answers.set(question.id, makeAnswer(question, entries, !question.required && entries.length === 0));
-			return true;
-		}
-		const index = choices.indexOf(choice);
+		const index = currentChoices.indexOf(choice);
 		if (index >= 0 && index < question.options.length) {
 			if (!question.multiple) {
-				const wasSelected = selected.has(index);
-				selected.clear();
-				if (!wasSelected) {
-					selected.add(index);
-				}
-			} else if (selected.has(index)) {
+				// Single choice answers the question as soon as an option is
+				// picked; a typed answer entered earlier rides along.
+				const option = question.options[index];
+				return submit([
+					{ value: option.value, label: option.label, custom: false },
+					...(custom ? [custom] : []),
+				], false);
+			}
+			if (selected.has(index)) {
 				selected.delete(index);
 			} else {
 				selected.add(index);
 			}
+			continue;
+		}
+		if (choice === doneLabel) {
+			const entries: AnswerEntry[] = [
+				...question.options
+					.filter((_, optionIndex) => selected.has(optionIndex))
+					.map((option) => ({ value: option.value, label: option.label, custom: false })),
+				...(custom ? [custom] : []),
+			];
+			if (submit(entries, !question.required && entries.length === 0)) {
+				return true;
+			}
+			continue;
 		}
 	}
 }

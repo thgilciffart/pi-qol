@@ -49,3 +49,5 @@ Session entries retain their existing names and formats. Restoring a goal pauses
 `npm pack --dry-run` checks package contents. Packaging includes `index.ts`, `src/`, `docs/`, the README, and the license. Tests and development dependencies are excluded.
 
 Pi compatibility adapters stay close to the feature that needs them. A Pi version change requires checking session persistence, the HTML template and exporter, theme helpers, editor wrapping, the resource picker, and footer APIs against the feature tests.
+
+Background threads remain outside the current implementation. The [background thread assessment](background-threads.md) explains why the standard CLI cannot preserve an in-flight run through an extension.

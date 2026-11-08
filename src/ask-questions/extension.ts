@@ -19,10 +19,24 @@ import {
 	toStructuredOutput,
 } from "./questions.ts";
 import {
+	defaultAskQuestionsConfigPath,
+	loadAskQuestionsConfigSync,
+} from "./config.ts";
+import {
 	AskUserOutputSchema,
 	AskUserParamsSchema,
 } from "./schema.ts";
 import { runQuestionnaire, type QuestionnaireContext, type RunQuestionnaireOptions } from "./ui/ask-questionnaire.ts";
+
+export interface AskQuestionsOptions {
+	/**
+	 * Settings file choosing where the tool is exposed. Defaults to
+	 * `<agent dir>/pi-qol/ask-questions.json`. Set `"expose": "tui"` there to
+	 * declare `ask_user` only in the terminal UI; RPC hosts such as T3 Code
+	 * then never see the tool and the model asks in prose instead.
+	 */
+	configPath?: string;
+}
 
 /** Structured details stored with the tool result for rendering. */
 export interface AskToolDetails {
@@ -97,7 +111,9 @@ interface BackgroundSurvey {
 }
 
 /** Start the questionnaire and wait for the user. */
-export default function askQuestionsExtension(pi: ExtensionAPI): void {
+export default function askQuestionsExtension(pi: ExtensionAPI, options: AskQuestionsOptions = {}): void {
+	const loaded = loadAskQuestionsConfigSync(options.configPath ?? defaultAskQuestionsConfigPath());
+	const tuiOnly = loaded.config.expose === "tui";
 	// A background questionnaire stays open after its tool call returns. It
 	// reports its answers with a steering message instead of a tool result,
 	// but only to the session that asked: session events bump the epoch, and
@@ -198,10 +214,16 @@ export default function askQuestionsExtension(pi: ExtensionAPI): void {
 			});
 	}
 
-	pi.on("session_start", () => {
+	pi.on("session_start", (_event, ctx) => {
 		sessionEpoch += 1;
 		shuttingDown = false;
 		closeBackground();
+		// "tui" exposure: outside the terminal UI (RPC hosts such as T3 Code,
+		// print/JSON modes) remove the tool from the active set so the model
+		// is never offered it there. The tool stays registered for direct calls.
+		if (tuiOnly && ctx.mode !== "tui") {
+			pi.setActiveTools(pi.getActiveTools().filter((name) => name !== "ask_user"));
+		}
 	});
 	pi.on("session_shutdown", () => {
 		sessionEpoch += 1;

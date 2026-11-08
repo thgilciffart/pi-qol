@@ -135,6 +135,8 @@ Press Ctrl+Alt+C or run `/continue` to resume an unfinished task after Escape. P
 
 The command does nothing while Pi is busy or input is queued. Use `/goal resume` for a paused goal.
 
+The standard Pi CLI owns the running agent. Closing Pi or switching sessions cannot preserve an in-flight run through this extension. Persistent goals retain their state, but need fresh direction or `/goal resume` after reopening. See the [background thread assessment](docs/background-threads.md) for Pi Durable compatibility and the current lifecycle limits.
+
 ## Start an ephemeral chat
 
 Press Alt+P or run `/ephemeral` to start a chat with in-memory history. A footer badge marks the ephemeral session. The previous saved chat remains on disk.

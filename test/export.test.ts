@@ -93,7 +93,8 @@ test('command writes enhanced native HTML before asking to open and honors decli
     const ctx = {
       cwd: dir, sessionManager: sm, hasUI: true,
       waitForIdle: async () => {}, getSystemPrompt: () => 'test system prompt',
-      ui: { theme: getThemeByName('dark')!, notify: (message: string) => notifications.push(message), confirm: async (title: string) => {
+      ui: { theme: getThemeByName('dark')!, notify: (message: string) => notifications.push(message),
+        select: async (_title: string, choices: string[]) => choices[0], confirm: async (title: string) => {
         prompts.push(title);
         assert.match(await readFile(target, 'utf8'), /id="pi-better-export"/);
         return false;

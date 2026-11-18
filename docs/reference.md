@@ -2,21 +2,24 @@
 
 ## Response statistics
 
-Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics. Each row uses `↑` for input tokens and `↓` for output tokens, with single spaces between values. Cost appears as a dollar amount without a `cost` label.
+The transcript shows one statistics row under each final assistant reply. By default, the row shows input, output, rate, TTFT, and cost, with spaces between values.
+
+`/metrics` opens the response metrics editor. Space toggles the selected stat or separator. Shift+Up, Shift+Down, `[`, and `]` reorder the selected stat. Press `e` to set the separator text and Enter to save the layout. The settings live at `<agent directory>/pi-qol/metrics.json`.
 
 | Value | Definition |
 | --- | --- |
-| Input | Provider-reported input, cache-read, and cache-write tokens for this response, added together. |
+| Input | `↑` shows the sum of Pi's reported input, cache-read, and cache-write tokens for the request that produced the final reply. It includes the conversation history and any other context sent with that request. |
 | Output | Provider-reported output tokens for this reply, including reasoning tokens when the provider counts them. |
 | TTFT | Time from Pi's `before_provider_request` event to the first nonempty text, thinking, or tool-call delta. |
 | Tokens per second | Output tokens divided by the elapsed seconds after the first delta and before `message_end`. |
 | Cost | Pi's `usage.cost.total` for this response in USD, rounded to four decimal places. Includes input, output, cache-read, and cache-write costs. Missing or invalid values display `n/a`. |
+| Model | The model ID recorded on the assistant reply. Hidden by default. |
 
 The clock is monotonic. TTFT includes request and network latency. Stream chunks can contain several tokens, so TTFT and token rate are approximations of provider generation timing. The rate uses the full output count because Pi does not report the token count of the first chunk.
 
 Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Token counts use provider usage reports rather than local tokenization.
 
-Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages and displays legacy final-reply rows with separate input and output counts. If a statistics entry lacks input usage or cost, the renderer reads the original assistant message when available. Missing values display `n/a`. Cost uses Pi's model pricing and usage data, rather than an account billing total. The extension does not reconstruct timing for messages created before installation. Ephemeral sessions keep statistics in memory.
+Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages. It fills in missing input, cost, and model values from the original assistant message when available. Missing values display `n/a`. Cost uses Pi's model pricing and usage data. Ephemeral sessions keep statistics in memory.
 
 ## Commands
 
@@ -25,6 +28,7 @@ Statistics rows persist as custom session entries and never enter model context.
 | `/continue` | Continues an interrupted task using a hidden cue. Ctrl+Alt+C is the equivalent editor shortcut. |
 | `/auto-name [option]` | Configures automatic first-message thread names. See the [automatic naming reference](auto-name.md). |
 | `/statusline [option]` | Opens the status line editor or changes footer settings. See the [status line reference](status-line.md). |
+| `/metrics` | Configures which response statistics appear, their order, and the separator. |
 | `/goal [objective]` | Shows the current goal, or sets an objective and starts work. See the [goal reference](goals.md) for lifecycle and budget commands. |
 | `/delete` | Confirms deletion, starts a new chat, then removes the previous session file. For an unsaved chat, discards the chat. |
 | `/open [search text]` | Opens the [thread picker](#thread-picker-keys) in open mode. Enter closes the picker, then switches to the highlighted thread with `ctx.switchSession`. Escape cancels. Pi's `/resume` is unchanged. |
@@ -113,6 +117,8 @@ Fullscreen takeover reads a private field of Pi's fullscreen renderer. If that f
 | `--` | Treats subsequent arguments as a filename, including filenames beginning with `--`. |
 
 The default filename is `pi-session-<timestamp>.html`. Relative paths use the chat's working directory. Paths beginning with `~/` expand to your home directory. The exporter creates missing parent directories and accepts `.html` and `.htm` files.
+
+In interactive Pi, the export prompt offers the requested path or a temporary export. A temporary export uses the same filename in a new directory inside `/tmp` on Unix or the system temporary directory on Windows. The file stays there for you to open or share.
 
 Export runs immediately during an active turn without waiting for or interrupting the agent. It captures the session entries recorded when the HTML is generated. A reply still streaming and unfinished tool output are included only after Pi records them. Later messages do not update an existing export.
 

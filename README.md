@@ -188,7 +188,7 @@ The picker excludes the current thread and stays open after deletion. See the [t
 
 ## Export a chat
 
-Run `/better-export` to save the session as HTML. Pi asks before replacing a file and offers to open the export in your browser.
+Run `/better-export` to save the session as HTML. Choose the requested path or a temporary export in `/tmp`. Pi asks before replacing a file and offers to open the export in your browser.
 
 ```text
 /better-export

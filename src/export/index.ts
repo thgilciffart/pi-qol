@@ -1,16 +1,17 @@
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import open from 'open';
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { errorMessage } from '../shared.ts';
 import { nativeExport } from './native-export.ts';
 import { parseOptions } from './options.ts';
-import { resolveTarget } from './target.ts';
+import { exportFilename, resolveTarget, TEMP_EXPORT_ROOT } from './target.ts';
 import { transformHtml } from './transform.ts';
 
 const IN_MEMORY_SESSION = 'HTML export needs a saved session. This session is in memory only ' +
   '(for example, Pi was started with --no-session or the session is ephemeral), so there is no session file to export.';
+const TEMPORARY = `Temporary export (${TEMP_EXPORT_ROOT})`;
 
 async function offerToOpen(target: string, ctx: ExtensionCommandContext): Promise<void> {
   if (!ctx.hasUI || !await ctx.ui.confirm('Open exported HTML?', 'Open this export in your default browser?')) return;
@@ -23,12 +24,18 @@ async function offerToOpen(target: string, ctx: ExtensionCommandContext): Promis
 
 export async function exportCommand(pi: ExtensionAPI, args: string, ctx: ExtensionCommandContext): Promise<void> {
   let staging: string | undefined;
+  let tempDirectory: string | undefined;
+  let published = false;
   try {
     // The native exporter snapshots recorded entries without interrupting a running turn.
     if (!ctx.sessionManager.getSessionFile()) throw new Error(IN_MEMORY_SESSION);
     const options = parseOptions(args);
     if (options.redact && !ctx.hasUI) throw new Error('Redaction preview requires an interactive Pi UI.');
-    const target = await resolveTarget(options, ctx);
+    const filename = exportFilename(options);
+    const choice = ctx.hasUI ? await ctx.ui.select('Where should the HTML export go?', ['Save to the requested path', TEMPORARY]) : undefined;
+    if (ctx.hasUI && choice === undefined) return;
+    if (choice === TEMPORARY) tempDirectory = await mkdtemp(join(TEMP_EXPORT_ROOT, 'pi-better-export-'));
+    const target = tempDirectory ? join(tempDirectory, basename(filename)) : await resolveTarget(filename, ctx);
     if (!target) return;
 
     // Stage next to the target so the final rename is atomic and the destination is untouched until then.
@@ -40,13 +47,15 @@ export async function exportCommand(pi: ExtensionAPI, args: string, ctx: Extensi
     if (html === undefined) return;
     await writeFile(temporary, html, 'utf8');
     await rename(temporary, target);
+    published = true;
 
     ctx.ui.notify(`Exported to ${target}`, 'info');
     await offerToOpen(target, ctx);
   } catch (error) {
     ctx.ui.notify(`Export failed: ${errorMessage(error)}`, 'error');
   } finally {
-    if (staging) await rm(staging, { recursive: true, force: true });
+    const cleanup = tempDirectory && !published ? tempDirectory : staging;
+    if (cleanup) await rm(cleanup, { recursive: true, force: true });
   }
 }
 

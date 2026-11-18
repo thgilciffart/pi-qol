@@ -42,7 +42,7 @@ export const FEATURES = [
   { id: 'thinking', domain: 'agent', label: 'Thinking shortcuts', provides: 'Alt+, and Alt+. thinking levels' },
   { id: 'ask-questions', domain: 'agent', label: 'Ask questions', provides: 'ask_user tool questionnaires' },
   { id: 'status-line', domain: 'display', label: 'Status line', provides: '/statusline custom footer', settingsCommand: 'statusline' },
-  { id: 'metrics', domain: 'display', label: 'Response metrics', provides: 'timing and token stats on replies' },
+  { id: 'metrics', domain: 'display', label: 'Response metrics', provides: '/metrics stats on replies', settingsCommand: 'metrics' },
   { id: 'export', domain: 'tools', label: 'HTML export', provides: '/better-export session exports' },
   { id: 'plugins', domain: 'tools', label: 'Plugin manager', provides: '/plugins extension toggles', settingsCommand: 'plugins' },
 ] as const satisfies readonly QolFeature[];

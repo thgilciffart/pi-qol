@@ -13,7 +13,7 @@ import { FEATURES, resolveTarget, targetChoices } from '../src/qol/features.ts';
 import { createCommandRegistry, wrapCommandRegistration } from '../src/qol/registry.ts';
 import { fakeTheme, strip } from './status-line/helpers.ts';
 
-const ALL_COMMANDS = ['better-export', 'ephemeral', 'delete', 'delete-threads', 'open', 'goal', 'auto-name', 'continue', 'statusline', 'plugins', 'qol'];
+const ALL_COMMANDS = ['better-export', 'ephemeral', 'delete', 'delete-threads', 'open', 'goal', 'auto-name', 'continue', 'statusline', 'metrics', 'plugins', 'qol'];
 const ALL_TOOLS = ['get_goal', 'create_goal', 'update_goal', 'ask_user'];
 const ALL_SHORTCUTS = ['ctrl+alt+c', 'alt+p', 'alt+,', 'alt+.'];
 
@@ -233,7 +233,7 @@ describe('selective registration at extension load', () => {
     const dir = await mkdtemp(join(tmpdir(), 'pi-qol-load-'));
     try {
       const configPath = join(dir, 'qol.json');
-      await saveQolConfig(configPath, { version: 1, features: { threads: false, goal: false, 'ask-questions': false, ephemeral: false, continue: false, thinking: false } });
+      await saveQolConfig(configPath, { version: 1, features: { threads: false, goal: false, 'ask-questions': false, ephemeral: false, continue: false, thinking: false, metrics: false } });
       const host = mockPi();
       qol(host.pi, { configPath });
       expect([...host.commands.keys()].sort()).toEqual(['auto-name', 'better-export', 'plugins', 'qol', 'statusline']);

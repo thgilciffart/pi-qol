@@ -13,7 +13,7 @@
 
 Disabling a feature removes its commands, tools, event handlers, and shortcuts on the next extension load. Saved conversations and feature-specific settings remain on disk. `/qol` itself cannot be disabled through this editor.
 
-The automatic naming, status line, and plugin manager settings rows open their existing editors. A feature must be loaded for its settings editor to be available. Enabling it and saving reloads Pi, which makes its editor available the next time `/qol` opens.
+The automatic naming, status line, response metrics, and plugin manager settings rows open their editors. A feature must be loaded for its settings editor to be available. Enabling it and saving reloads Pi, which makes its editor available the next time `/qol` opens.
 
 ## Commands
 
@@ -46,7 +46,7 @@ Saving changed feature switches reloads Pi when it is idle and has no queued inp
 | Escape | Closes the editor. When feature switches have changed, a second Escape confirms discarding them. |
 | Ctrl+C | Discards feature switches and closes the editor. |
 
-Feature switches remain pending while a settings row's editor is open. Those nested editors save their own settings independently. Cancelling `/qol` discards only its pending feature switches. A reload requested by the plugin manager waits until `/qol` closes.
+Feature switches remain pending while a settings row's editor is open. Those nested editors save their own settings independently. Cancelling `/qol` discards only its pending feature switches. Reloads requested by a nested editor wait until `/qol` closes.
 
 ## Storage
 

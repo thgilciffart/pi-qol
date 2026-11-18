@@ -114,13 +114,15 @@ test('redaction cancellation leaves the destination unchanged and removes stagin
     const messages: string[] = [];
     const ctx = { cwd: dir, sessionManager: sm, hasUI: true, waitForIdle: async () => {}, getSystemPrompt: () => '', ui: {
       theme: themeModule.getThemeByName('dark'), confirm: async () => true,
-      select: async () => 'Cancel export', notify: (message: string) => messages.push(message),
+      select: async (title: string, choices: string[]) =>
+        title === 'Where should the HTML export go?' ? choices[0] : 'Cancel export',
+      notify: (message: string) => messages.push(message),
     } };
     await exportCommand({ getAllTools: () => [] } as any, '--share report.html', ctx as any);
     assert.equal(await readFile(file, 'utf8'), 'original file');
     assert.ok(!(await readdir(dir)).some(name => name.startsWith('.pi-better-export-')));
     assert.deepEqual(messages, []);
-    ctx.ui.select = async () => 'Save export with 1 redaction';
+    ctx.ui.select = async (title, choices) => title === 'Where should the HTML export go?' ? choices[0] : 'Save export with 1 redaction';
     ctx.ui.confirm = async (title?: string) => title !== 'Open exported HTML?';
     await exportCommand({ getAllTools: () => [] } as any, '--share report.html', ctx as any);
     const html = await readFile(file, 'utf8');

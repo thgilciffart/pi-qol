@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getPackageDir, SessionManager, initTheme } from '@earendil-works/pi-coding-agent';
 import { exportCommand } from '../src/export/index.ts';
+import { TEMP_EXPORT_ROOT } from '../src/export/target.ts';
 
 const { getThemeByName } = await import(pathToFileURL(join(getPackageDir(), 'dist/modes/interactive/theme/theme.js')).href);
 initTheme('dark');
@@ -21,6 +22,7 @@ function context(dir: string, sessionManager: SessionManager, ui: Record<string,
       theme: getThemeByName('dark'),
       notify: (message: string, type?: string) => notices.push({ message, type }),
       confirm: async (title: string) => { prompts.push(title); return false; },
+      select: async (_title: string, choices: string[]) => choices[0],
       ...ui,
     },
   };
@@ -78,6 +80,34 @@ test('declining replacement keeps the file and writes nothing', async () => {
     assert.deepEqual(notices, []);
     assert.equal(await readFile(file, 'utf8'), 'original');
     await noStaging(dir);
+  });
+});
+
+test('temporary export uses an isolated directory and keeps only the requested basename', async () => {
+  await withSession(async (dir, sm) => {
+    const { ctx, notices } = context(dir, sm, { select: async (_title: string, choices: string[]) => choices[1] });
+    await exportCommand(pi, '"exports/My reply.html"', ctx);
+    assert.match(notices[0].message, /^Exported to /);
+    const target = notices[0].message.slice('Exported to '.length);
+    const temporary = dirname(target);
+    try {
+      assert.equal(dirname(temporary), TEMP_EXPORT_ROOT);
+      assert.equal(target, join(temporary, 'My reply.html'));
+      assert.match(await readFile(target, 'utf8'), /id="pi-better-export"/);
+      assert.deepEqual(await readdir(temporary), ['My reply.html']);
+      assert.ok(!(await readdir(dir)).includes('exports'));
+    } finally { await rm(temporary, { recursive: true, force: true }); }
+  });
+});
+
+test('dismissing the destination picker cancels the export', async () => {
+  await withSession(async (dir, sm) => {
+    const files = await readdir(dir);
+    const { ctx, notices, prompts } = context(dir, sm, { select: async () => undefined });
+    await exportCommand(pi, 'out.html', ctx);
+    assert.deepEqual(await readdir(dir), files);
+    assert.deepEqual(notices, []);
+    assert.deepEqual(prompts, []);
   });
 });
 

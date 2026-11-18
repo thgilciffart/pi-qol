@@ -2,24 +2,25 @@
 
 ## Response statistics
 
-The transcript shows one statistics row under each final assistant reply. By default, the row shows input, output, rate, TTFT, and cost, with spaces between values.
+The transcript shows one statistics row under each final assistant reply, aligned with the reply text. By default, the row shows input, output, rate, TTFT, and cost, with spaces between values. After changing Pi's output padding, run `/reload` to realign existing metrics rows.
 
 `/metrics` opens the response metrics editor. Space toggles the selected stat or separator. Shift+Up, Shift+Down, `[`, and `]` reorder the selected stat. Press `e` to set the separator text and Enter to save the layout. The settings live at `<agent directory>/pi-qol/metrics.json`.
 
 | Value | Definition |
 | --- | --- |
-| Input | `↑` shows the sum of Pi's reported input, cache-read, and cache-write tokens for the request that produced the final reply. It includes the conversation history and any other context sent with that request. |
+| Input | `↑` shows Pi's token estimate for user messages since the previous final reply, including steering messages. It excludes system prompts, assistant messages, and tool results. |
 | Output | Provider-reported output tokens for this reply, including reasoning tokens when the provider counts them. |
 | TTFT | Time from Pi's `before_provider_request` event to the first nonempty text, thinking, or tool-call delta. |
 | Tokens per second | Output tokens divided by the elapsed seconds after the first delta and before `message_end`. |
 | Cost | Pi's `usage.cost.total` for this response in USD, rounded to four decimal places. Includes input, output, cache-read, and cache-write costs. Missing or invalid values display `n/a`. |
 | Model | The model ID recorded on the assistant reply. Hidden by default. |
+| Working time | Elapsed time from the first model turn to the end of the final reply, including tool calls and intermediate model requests. Hidden by default. Older rows display `n/a` when timing is unavailable. |
 
 The clock is monotonic. TTFT includes request and network latency. Stream chunks can contain several tokens, so TTFT and token rate are approximations of provider generation timing. The rate uses the full output count because Pi does not report the token count of the first chunk.
 
-Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Token counts use provider usage reports rather than local tokenization.
+Missing first-delta timing or a zero generation interval produces `n/a`. A legacy stream without a request event starts timing at `message_start`. Pi estimates input from character counts and assigns a fixed estimate to each image. Output and cost still use reported usage for the final reply.
 
-Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages. It fills in missing input, cost, and model values from the original assistant message when available. Missing values display `n/a`. Cost uses Pi's model pricing and usage data. Ephemeral sessions keep statistics in memory.
+Statistics rows persist as custom session entries and never enter model context. Pi restores those rows when you resume a session. The renderer hides legacy rows attached to tool-call messages. For older rows linked to an assistant reply, it estimates turn input from the saved conversation branch and reads missing cost and model values from the reply. Missing values display `n/a`. Ephemeral sessions keep statistics in memory.
 
 ## Commands
 

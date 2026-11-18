@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { sanitizeInline } from '../status-line/sanitize.ts';
 
 export const STAT_LABELS = {
-  input: 'Request input tokens',
+  input: 'Turn input tokens (estimate)',
   output: 'Output tokens',
   tps: 'Tokens per second',
   ttft: 'Time to first token',
   cost: 'Cost',
   model: 'Model',
+  working: 'Working time',
 } as const;
 
 type StatId = keyof typeof STAT_LABELS;
@@ -21,7 +22,7 @@ export interface MetricsConfig {
 
 export function defaultMetricsConfig(): MetricsConfig {
   return {
-    items: STAT_IDS.map(id => ({ id, enabled: id !== 'model' })),
+    items: STAT_IDS.map(id => ({ id, enabled: id !== 'model' && id !== 'working' })),
     separator: { enabled: false, text: '|' },
   };
 }

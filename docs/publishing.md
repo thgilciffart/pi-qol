@@ -1,67 +1,60 @@
 # Publish to npm
 
-Use Node.js 22.19 or later and Bun. Run these commands from the repository root.
+## Publish an update
 
-## Publish the first release
+1. Push changes to `main` with Conventional Commit messages. Use `fix:` for a patch release, `feat:` for a minor release, and `!` for a breaking change. Before version 1.0, breaking changes bump the minor version.
 
-1. Install the locked dependencies.
+2. Review the release PR that Release Please opens or updates. It changes `package.json`, `package-lock.json`, `CHANGELOG.md`, and `.release-please-manifest.json`.
+
+3. Merge the release PR. The `publish.yml` workflow creates the version tag and GitHub release, then checks out that tag and publishes to npm. The publish hook runs type checking and the Bun test suite before publication.
+
+4. Verify the published version after npm finishes processing the package.
 
    ```sh
-   npm ci
+	npm view @thgilciffart/pi-qol version --registry=https://registry.npmjs.org/
    ```
 
-2. Sign in with an npm account that can publish under `@thgilciffart`.
+5. Install the release in Pi.
 
    ```sh
-   npm login --registry=https://registry.npmjs.org/
-   npm whoami --registry=https://registry.npmjs.org/
-   ```
-
-3. Validate the release without uploading it.
-
-   ```sh
-   npm publish --dry-run
-   ```
-
-   The publish hook runs the typecheck and tests. Check the package file list in the output. It includes the extension entry point, source files, export assets, documentation, and license.
-
-4. Publish version `0.1.0` as a public package.
-
-   ```sh
-   npm publish --access public
-   ```
-
-   Complete any authentication prompts in npm. The package manifest sets the public npm registry and public access.
-
-5. Verify the published metadata.
-
-   ```sh
-   npm view @thgilciffart/pi-qol version keywords pi --json --registry=https://registry.npmjs.org/
-   ```
-
-6. Install the release in Pi.
-
-   ```sh
-   pi install npm:@thgilciffart/pi-qol
+	pi install npm:@thgilciffart/pi-qol
    ```
 
    Run `/reload` in an open Pi session.
 
-## Check Pi package discovery
+## Configure trusted publishing
 
-Keep `pi-package` in `package.json` under `keywords`. Pi's [package documentation](https://pi.dev/docs/latest/packages) identifies this keyword as the requirement for gallery discovery. The `pi.extensions` manifest points to `./index.ts`.
+In the npm package settings, create a GitHub Actions trusted publisher with these values:
 
-After npm indexes the release, search for `@thgilciffart/pi-qol` in the [Pi package catalog](https://pi.dev/packages). Catalog visibility can lag publication. Publishing to GitHub alone does not create an npm package listing.
+- Organization or user: `thgilciffart`
+- Repository: `pi-qol`
+- Workflow filename: `publish.yml`
+- Environment name: leave blank
+- Allow `npm publish`: enabled
 
-## Publish an update
+GitHub Actions must be allowed to create pull requests in the repository's Actions settings. No npm token or additional GitHub token is required. Publishing runs in the same workflow that creates the release.
 
-Commit your changes before you bump the version. Choose `patch`, `minor`, or `major` for the release.
+A new npm trusted publisher must complete its first successful publish within two days. If the connection expires before that happens, delete it, recreate it, and rerun publication. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+
+## Retry a failed publication
+
+Rerun the failed publish job from its workflow run. You can also run `publish.yml` manually against the release tag.
+
+Each published npm version is immutable. Publish subsequent changes through a new release PR.
+
+## Validate a package locally
+
+Use Node.js 22.19 or later and Bun 1.4.4. Run these commands from the repository root:
 
 ```sh
-npm version patch
-npm publish --dry-run
-npm publish --access public
-git push origin main --follow-tags
+	npm ci
+	npm publish --dry-run
 ```
 
-npm does not allow reuse of a published name and version. See the [npm publish reference](https://docs.npmjs.com/cli/v11/commands/npm-publish/).
+The publish hook runs type checking and tests. Check that the package includes the extension entry point, source files, export assets, documentation, and license.
+
+## Check Pi package discovery
+
+Keep `pi-package` in `package.json` under `keywords`. The `pi.extensions` manifest points to `./index.ts`.
+
+After npm indexes the release, search for `@thgilciffart/pi-qol` in the [Pi package catalog](https://pi.dev/packages). Catalog visibility can lag publication. Publishing to GitHub alone does not create an npm package listing.

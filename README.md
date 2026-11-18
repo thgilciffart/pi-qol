@@ -219,6 +219,6 @@ Run `pi install .` to install this checkout, then `/reload` in an open session. 
 
 See the [codebase map](docs/architecture.md) for feature boundaries, persistence, and tests.
 
-See [Publish to npm](docs/publishing.md) for release commands and package discovery.
+See [Publish to npm](docs/publishing.md) for automated releases and package discovery.
 
 [MIT license](LICENSE). Embedded KaTeX assets retain their upstream license notices.

@@ -3,7 +3,7 @@ import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
-import { stripTerminalSequences } from '@earendil-works/pi-tui';
+import { getCapabilities, setCapabilities, stripTerminalSequences } from '@earendil-works/pi-tui';
 import threads from '../src/threads.ts';
 import { ThreadTranscript } from '../src/thread-transcript.ts';
 
@@ -167,7 +167,8 @@ test('a thread deleted while the picker is open is reported instead of switching
 });
 
 test('ctrl+t shows the highlighted transcript, and enter after closing it still opens the thread', async () => {
-  const f = await fixture();
+  const f = await fixture(), capabilities = getCapabilities();
+  setCapabilities({ ...capabilities, images: null });
   try {
     const h = harness(f.current);
     h.steps.push('\x14', async ({ overlays }) => {
@@ -182,7 +183,7 @@ test('ctrl+t shows the highlighted transcript, and enter after closing it still 
     }, '\r');
     await h.run();
     expect(h.switched).toEqual([f.other.getSessionFile()!]);
-  } finally { await f.cleanup(); }
+  } finally { setCapabilities(capabilities); await f.cleanup(); }
 });
 
 test('/open refuses headless and non-terminal UI modes', async () => {

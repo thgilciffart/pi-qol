@@ -2,7 +2,7 @@
 
 ## Response statistics
 
-Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics. Each row labels input and output separately and uses spaces between values, without dot separators or a combined token total.
+Each final assistant reply adds a statistics row to the transcript. Messages that call tools have no statistics row. The footer contains no response statistics. Each row uses `↑` for input tokens and `↓` for output tokens, with single spaces between values. Cost appears as a dollar amount without a `cost` label.
 
 | Value | Definition |
 | --- | --- |

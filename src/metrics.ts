@@ -24,7 +24,7 @@ export function formatMetrics(stats: ResponseMetrics): string {
   const tps = stats.tps === undefined ? 'n/a' : stats.tps.toFixed(1);
   const ttft = stats.ttftMs === undefined ? 'n/a' : `${(stats.ttftMs / 1000).toFixed(2)}s`;
   const cost = stats.cost !== undefined && Number.isFinite(stats.cost) && stats.cost >= 0 ? `$${stats.cost.toFixed(4)}` : 'n/a';
-  return `${stats.input ?? 'n/a'} input  ${stats.output} output  ${tps} tok/s  TTFT ${ttft}  cost ${cost}`;
+  return `↑${stats.input ?? 'n/a'} ↓${stats.output} ${tps} tok/s TTFT ${ttft} ${cost}`;
 }
 
 function isReply(message: { role: string; content?: unknown; stopReason?: string }): boolean {

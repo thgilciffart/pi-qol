@@ -21,11 +21,11 @@ function harness() {
 const message = { role: 'assistant', content: [{ type: 'text', text: 'Hello' }],
   usage: { input: 10, output: 20, cacheRead: 30, cacheWrite: 40, cost: { total: 0.012345 } }, durationMs: 2000 };
 
-test('rate excludes first-token latency and displays separate input and output counts without dot separators', () => {
+test('rate excludes first-token latency and displays compact input and output counts', () => {
   expect(calculateMetrics(80, 20, 2500, 500).tps).toBe(10);
   expect(calculateMetrics(80, 20, 0, 0).tps).toBeUndefined();
   expect(calculateMetrics(80, 20, 2500).tps).toBeUndefined();
-  expect(formatMetrics(calculateMetrics(80, 20, 2500, 500))).toBe('80 input  20 output  10.0 tok/s  TTFT 0.50s  cost n/a');
+  expect(formatMetrics(calculateMetrics(80, 20, 2500, 500))).toBe('↑80 ↓20 10.0 tok/s TTFT 0.50s n/a');
 });
 
 test('records a final reply once, keeps counts separate and excludes statistics from model context, and never sets a footer', () => {
@@ -84,9 +84,9 @@ test('resumed legacy tool statistics are hidden and final statistics show separa
   const toolId = h.manager.appendMessage({ ...message, stopReason: 'toolUse' } as any);
   const replyId = h.manager.appendMessage(message as any);
   expect(h.render({ input: 7500, output: 56, messageEntryId: toolId })).toBeUndefined();
-  expect(h.render({ input: 7724, output: 164, messageEntryId: replyId })).toEqual(['7724 input  164 output  n/a tok/s  TTFT n/a  cost $0.0123']);
-  expect(h.render({ output: 20, messageEntryId: replyId })).toEqual(['80 input  20 output  n/a tok/s  TTFT n/a  cost $0.0123']);
-  expect(h.render({ input: 80, output: 20, cost: 0, messageEntryId: replyId })).toEqual(['80 input  20 output  n/a tok/s  TTFT n/a  cost $0.0000']);
+  expect(h.render({ input: 7724, output: 164, messageEntryId: replyId })).toEqual(['↑7724 ↓164 n/a tok/s TTFT n/a $0.0123']);
+  expect(h.render({ output: 20, messageEntryId: replyId })).toEqual(['↑80 ↓20 n/a tok/s TTFT n/a $0.0123']);
+  expect(h.render({ input: 80, output: 20, cost: 0, messageEntryId: replyId })).toEqual(['↑80 ↓20 n/a tok/s TTFT n/a $0.0000']);
 });
 
 test('empty deltas do not establish TTFT and aborted text replies still get a row', () => {
@@ -103,7 +103,7 @@ test('empty deltas do not establish TTFT and aborted text replies still get a ro
 
 test('cost displays USD per response, preserving zero and marking missing or invalid values', () => {
   const stats = calculateMetrics(80, 20, 2500, 500);
-  expect(formatMetrics({ ...stats, cost: 0.012345 })).toEndWith('cost $0.0123');
-  expect(formatMetrics({ ...stats, cost: 0 })).toEndWith('cost $0.0000');
-  for (const cost of [undefined, NaN, Infinity, -1]) expect(formatMetrics({ ...stats, cost })).toEndWith('cost n/a');
+  expect(formatMetrics({ ...stats, cost: 0.012345 })).toEndWith('$0.0123');
+  expect(formatMetrics({ ...stats, cost: 0 })).toEndWith('$0.0000');
+  for (const cost of [undefined, NaN, Infinity, -1]) expect(formatMetrics({ ...stats, cost })).toEndWith('n/a');
 });
